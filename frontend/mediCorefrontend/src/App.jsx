@@ -3,6 +3,7 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import PatientDashboard from "./pages/patient/PatientDashboard";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRole }) => {
@@ -42,7 +43,12 @@ const App = () => {
             </ProtectedRoute>
           }
         />
-
+{/* Admin Dashboard */}
+        <Route path="/admin/dashboard" element={
+          <ProtectedRoute allowedRole="admin">
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
       </Routes>
     </BrowserRouter>
   );
