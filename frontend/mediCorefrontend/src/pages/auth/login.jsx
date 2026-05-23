@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { getApiError } from "../../api/axios";
+import { loginUser } from "../../api/authApi";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ const Login = () => {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", formData);
+      const res = await loginUser(formData);
       const { token, user } = res.data;
 
       localStorage.setItem("token", token);
@@ -31,7 +32,7 @@ const Login = () => {
       else if (user.role === "ambulance_driver") navigate("/ambulance/dashboard");
 
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+      setError(getApiError(err, "Login failed"));
     } finally {
       setLoading(false);
     }

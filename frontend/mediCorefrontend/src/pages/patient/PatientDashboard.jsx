@@ -1,0 +1,851 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import * as THREE from "three";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { getPatientProviders } from "../../api/authApi";
+
+const LIGHT = {
+  bg: "bg-[#EEF3F6]",
+  panel: "bg-white",
+  panelMuted: "bg-[#F7FAFC]",
+  text: "text-[#0A1628]",
+  subtext: "text-[#64748B]",
+  border: "border-[#DDE6EE]",
+  line: "#DDE6EE",
+  tooltip: "#FFFFFF",
+};
+
+const DARK = {
+  bg: "bg-[#060D18]",
+  panel: "bg-[#0D1F35]",
+  panelMuted: "bg-[#0A1628]",
+  text: "text-[#E2E8F0]",
+  subtext: "text-[#94A3B8]",
+  border: "border-[#162940]",
+  line: "#162940",
+  tooltip: "#0D1F35",
+};
+
+const Icon = ({ name, size = 17, className = "" }) => {
+  const paths = {
+    dashboard: "M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-5H4v5Z",
+    heart: "M12 21s-7-4.4-9.2-9A5.4 5.4 0 0 1 12 6.2 5.4 5.4 0 0 1 21.2 12C19 16.6 12 21 12 21Z",
+    brain: "M9 4a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4H9Zm3 0v16M7 9h4m2 0h4M7 15h4m2 0h4",
+    doctor: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0M12 15v4m-2-2h4",
+    hospital: "M4 20V7l8-3 8 3v13H4Zm6-8h4m-2-2v4M8 20v-4h8v4",
+    ambulance: "M3 17h2a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h2v-5l-3-4h-4V5H3v12Zm11-5h5M6 8h4m-2-2v4",
+    file: "M6 3h8l4 4v14H6V3Zm8 0v5h5M9 12h6M9 16h6",
+    card: "M3 6h18v12H3V6Zm0 4h18M7 15h3",
+    settings: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-12v3m0 11v3M4.2 6.2l2.1 2.1m11.4 7.4 2.1 2.1M2 12h3m14 0h3M4.2 17.8l2.1-2.1m11.4-7.4 2.1-2.1",
+    search: "M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm5.5-2 5 5",
+    mic: "M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm-7-3a7 7 0 0 0 14 0M12 18v4",
+    send: "M3 11 21 3l-8 18-2-8-8-2Z",
+    phone: "M6.6 3.5 9 6l-1.5 2c1 2.2 2.8 4 5 5L14.5 11 17 13.4V18c0 .6-.4 1-1 1C9.9 19 5 14.1 5 8V4.5c0-.6.4-1 1-1h.6Z",
+    map: "M9 18 3 21V6l6-3 6 3 6-3v15l-6 3-6-3Zm0-15v15m6-12v15",
+    bell: "M18 16H6l1.5-2V9a4.5 4.5 0 0 1 9 0v5L18 16Zm-4 3a2 2 0 0 1-4 0",
+    moon: "M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z",
+    sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-15v3m0 14v3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1M2 12h3m14 0h3M4.2 19.8l2.1-2.1m11.4-11.4 2.1-2.1",
+    menu: "M4 7h16M4 12h16M4 17h16",
+    close: "M6 6l12 12M18 6 6 18",
+    trend: "M4 17 9 12l4 4 7-9M14 7h6v6",
+  };
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      className={className}
+      fill={["dashboard", "heart"].includes(name) ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={paths[name] || paths.dashboard} />
+    </svg>
+  );
+};
+
+const demoDoctors = [
+  { _id: "d1", name: "Dr. Sarah Chen", specialization: "Cardiology", experience: 8, status: "active", distance: 2.4, rating: 4.9, fee: "Rs. 1,500", patients: 320 },
+  { _id: "d2", name: "Dr. Ahmed Raza", specialization: "General Medicine", experience: 11, status: "approved", distance: 5.7, rating: 4.8, fee: "Rs. 900", patients: 410 },
+  { _id: "d3", name: "Dr. Maria Khan", specialization: "Dermatology", experience: 6, status: "active", distance: 10.8, rating: 4.7, fee: "Rs. 1,200", patients: 244 },
+  { _id: "d4", name: "Dr. Hamza Ali", specialization: "Orthopedic", experience: 9, status: "active", distance: 12.1, rating: 4.6, fee: "Rs. 1,400", patients: 198 },
+];
+
+const demoDrivers = [
+  { _id: "a1", name: "Kamran Ali", vehicleNumber: "AMB-221", ambulanceType: "Basic Life Support", status: "active", distance: 1.8, eta: "5 min", mobileNumber: "0300-1234567" },
+  { _id: "a2", name: "Shahid Raza", vehicleNumber: "AMB-185", ambulanceType: "Cardiac Ambulance", status: "approved", distance: 6.3, eta: "11 min", mobileNumber: "0301-7654321" },
+  { _id: "a3", name: "Tariq Mehmood", vehicleNumber: "AMB-309", ambulanceType: "Oxygen Support", status: "active", distance: 13.2, eta: "18 min", mobileNumber: "0302-9988776" },
+];
+
+const hospitals = [
+  { name: "Gujranwala General Hospital", type: "Government", distance: 2.1, emergency: true, phone: "055-1234567", rating: 4.5 },
+  { name: "City Care Clinic", type: "Private", distance: 4.2, emergency: false, phone: "055-9876543", rating: 4.6 },
+  { name: "MediCare Hospital", type: "Private", distance: 8.6, emergency: true, phone: "055-1122334", rating: 4.4 },
+  { name: "Allied Teaching Hospital", type: "Government", distance: 14.3, emergency: true, phone: "055-7654321", rating: 4.3 },
+];
+
+const weeklyVitals = [
+  { day: "Mon", heart: 72, oxygen: 98, temp: 36.7 },
+  { day: "Tue", heart: 75, oxygen: 97, temp: 36.8 },
+  { day: "Wed", heart: 70, oxygen: 98, temp: 36.6 },
+  { day: "Thu", heart: 76, oxygen: 96, temp: 37.2 },
+  { day: "Fri", heart: 73, oxygen: 98, temp: 36.9 },
+  { day: "Sat", heart: 71, oxygen: 99, temp: 36.8 },
+  { day: "Sun", heart: 72, oxygen: 98, temp: 36.8 },
+];
+
+const recoveryTrend = [
+  { month: "Jan", symptoms: 18, visits: 3 },
+  { month: "Feb", symptoms: 15, visits: 2 },
+  { month: "Mar", symptoms: 12, visits: 3 },
+  { month: "Apr", symptoms: 9, visits: 1 },
+  { month: "May", symptoms: 7, visits: 2 },
+  { month: "Jun", symptoms: 5, visits: 1 },
+];
+
+const departmentMix = [
+  { name: "General", value: 36, color: "#0891B2" },
+  { name: "Cardio", value: 24, color: "#C8102E" },
+  { name: "Lab", value: 22, color: "#059669" },
+  { name: "Other", value: 18, color: "#F59E0B" },
+];
+
+const records = [
+  { title: "Cardiology consultation", date: "May 18, 2026", doctor: "Dr. Sarah Chen", status: "Completed" },
+  { title: "CBC blood test", date: "May 12, 2026", doctor: "MediCare Lab", status: "Reviewed" },
+  { title: "Fever and cough follow-up", date: "April 30, 2026", doctor: "Dr. Ahmed Raza", status: "Completed" },
+];
+
+const prescriptions = [
+  { medicine: "Paracetamol 500mg", schedule: "After meal, twice daily", days: "3 days" },
+  { medicine: "Vitamin D3", schedule: "Once weekly", days: "4 weeks" },
+  { medicine: "ORS Sachet", schedule: "As needed with fluids", days: "2 days" },
+];
+
+const vitals = [
+  { label: "Heart Rate", value: "72 bpm", tone: "text-[#C8102E]" },
+  { label: "Blood Pressure", value: "118/76", tone: "text-[#0891B2]" },
+  { label: "O2 Saturation", value: "98%", tone: "text-[#059669]" },
+  { label: "Temperature", value: "36.8 C", tone: "text-[#F59E0B]" },
+];
+
+const chartTooltip = (theme) => ({
+  contentStyle: {
+    background: theme.tooltip,
+    border: `1px solid ${theme.line}`,
+    borderRadius: 8,
+    boxShadow: "0 16px 40px rgba(10, 22, 40, 0.12)",
+  },
+  labelStyle: { color: "#64748B", fontSize: 12 },
+});
+
+const VitalsScene = ({ darkMode }) => {
+  const mountRef = useRef(null);
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return undefined;
+
+    const width = mount.clientWidth || 320;
+    const height = mount.clientHeight || 220;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(width, height);
+    mount.appendChild(renderer.domElement);
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.05, 3),
+      new THREE.MeshStandardMaterial({
+        color: darkMode ? "#0891B2" : "#C8102E",
+        roughness: 0.26,
+        metalness: 0.18,
+        transparent: true,
+        opacity: 0.9,
+      })
+    );
+    group.add(core);
+
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: darkMode ? "#94A3B8" : "#0891B2",
+      transparent: true,
+      opacity: 0.38,
+      side: THREE.DoubleSide,
+    });
+
+    [0, 1, 2].forEach((index) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.38 + index * 0.22, 0.01, 16, 96), ringMaterial);
+      ring.rotation.x = index * 0.74;
+      ring.rotation.y = index * 0.48;
+      group.add(ring);
+    });
+
+    const points = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 80 }, () => {
+          const radius = 1.7 + Math.random() * 0.55;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          return new THREE.Vector3(
+            radius * Math.sin(phi) * Math.cos(theta),
+            radius * Math.sin(phi) * Math.sin(theta),
+            radius * Math.cos(phi)
+          );
+        })
+      ),
+      new THREE.PointsMaterial({ color: "#C8102E", size: 0.025, transparent: true, opacity: 0.8 })
+    );
+    group.add(points);
+
+    scene.add(new THREE.AmbientLight("#ffffff", 1.6));
+    const keyLight = new THREE.DirectionalLight("#ffffff", 1.2);
+    keyLight.position.set(3, 4, 5);
+    scene.add(keyLight);
+
+    camera.position.z = 4.6;
+
+    let frameId;
+    const animate = () => {
+      group.rotation.y += 0.006;
+      group.rotation.x = Math.sin(Date.now() * 0.001) * 0.08;
+      points.rotation.y -= 0.002;
+      renderer.render(scene, camera);
+      frameId = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    const handleResize = () => {
+      const nextWidth = mount.clientWidth || width;
+      const nextHeight = mount.clientHeight || height;
+      camera.aspect = nextWidth / nextHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nextWidth, nextHeight);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", handleResize);
+      renderer.dispose();
+      mount.removeChild(renderer.domElement);
+    };
+  }, [darkMode]);
+
+  return <div ref={mountRef} className="h-[220px] w-full" data-testid="patient-vitals-3d" />;
+};
+
+const PatientDashboard = () => {
+  const [darkMode, setDarkMode] = useState(false);
+  const [activeNav, setActiveNav] = useState("Dashboard");
+  const [selectedSpec, setSelectedSpec] = useState("All");
+  const [symptomText, setSymptomText] = useState("");
+  const [chatMessages, setChatMessages] = useState([
+    { sender: "ai", text: "Describe symptoms or ask about prescriptions. I will help you prepare for care." },
+  ]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [emergencyMode, setEmergencyMode] = useState(false);
+  const [providers, setProviders] = useState({ doctors: demoDoctors, ambulanceDrivers: demoDrivers });
+  const [providerError, setProviderError] = useState("");
+
+  const theme = darkMode ? DARK : LIGHT;
+  const user = useMemo(
+    () =>
+      JSON.parse(
+        localStorage.getItem("user") ||
+          '{"name":"Patient","fullName":"Patient","email":"patient@example.com","role":"patient"}'
+      ),
+    []
+  );
+
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const response = await getPatientProviders();
+        setProviders({
+          doctors: response.data.doctors.length ? response.data.doctors : demoDoctors,
+          ambulanceDrivers: response.data.ambulanceDrivers.length ? response.data.ambulanceDrivers : demoDrivers,
+        });
+      } catch (error) {
+        setProviderError("Live provider API is unavailable, showing preview data.");
+      }
+    };
+
+    fetchProviders();
+  }, []);
+
+  const doctorSpecs = useMemo(() => {
+    const specs = providers.doctors.map((doctor) => doctor.specialization || "General Medicine");
+    return ["All", ...new Set(specs)];
+  }, [providers.doctors]);
+
+  const filteredDoctors = providers.doctors.filter((doctor) => {
+    const spec = doctor.specialization || "General Medicine";
+    return selectedSpec === "All" || spec === selectedSpec;
+  });
+
+  const nearbyDoctors = providers.doctors.filter((doctor) => (doctor.distance || 7) <= 15);
+  const nearbyDrivers = providers.ambulanceDrivers.filter((driver) => (driver.distance || 7) <= 15);
+  const nearbyHospitals = hospitals.filter((hospital) => hospital.distance <= 15);
+
+  const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
+  const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  };
+
+  const handleAIMessage = async () => {
+    const text = symptomText.trim();
+    if (!text) return;
+
+    setChatMessages((messages) => [...messages, { sender: "patient", text }]);
+    setSymptomText("");
+    setAiLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    setChatMessages((messages) => [
+      ...messages,
+      {
+        sender: "ai",
+        text: `For "${text}", monitor severity, breathing, hydration, and duration. Use emergency care for chest pain, fainting, heavy bleeding, or severe breathing difficulty. This is guidance, not a diagnosis.`,
+      },
+    ]);
+    setAiLoading(false);
+  };
+
+  const handleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSymptomText("My browser does not support voice recognition, so I am typing my symptoms.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (event) => setSymptomText(event.results[0][0].transcript);
+    recognition.start();
+  };
+
+  const navItems = [
+    ["Dashboard", "dashboard"],
+    ["AI Chat", "brain"],
+    ["Doctors", "doctor"],
+    ["Emergency", "ambulance"],
+    ["Hospitals", "hospital"],
+    ["Records", "file"],
+    ["Payments", "card"],
+    ["Settings", "settings"],
+  ];
+
+  return (
+    <div className={`min-h-screen ${theme.bg} font-sans transition-colors duration-300`}>
+      <div className="flex min-h-screen">
+        <aside className="sticky top-0 hidden h-screen w-[228px] shrink-0 border-r border-[#1E2D45] bg-[#0A1628] lg:flex lg:flex-col">
+          <div className="flex h-16 items-center gap-3 border-b border-[#1E2D45] px-5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8102E] text-white">
+              <Icon name="heart" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">MediCore</p>
+              <p className="text-[11px] font-semibold text-[#94A3B8]">Patient console</p>
+            </div>
+          </div>
+
+          <nav className="flex-1 space-y-1.5 p-3">
+            {navItems.map(([label, icon]) => (
+              <button
+                key={label}
+                onClick={() => setActiveNav(label)}
+                className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
+                  activeNav === label
+                    ? "bg-white text-[#0A1628]"
+                    : "text-[#94A3B8] hover:bg-[#15243A] hover:text-white"
+                }`}
+              >
+                <Icon name={icon} />
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="border-t border-[#1E2D45] p-3">
+            <button
+              onClick={handleLogout}
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#C8102E] text-sm font-bold text-white transition hover:bg-[#A30D26]"
+            >
+              <Icon name="close" size={15} /> Logout
+            </button>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1">
+          <header
+            className={`sticky top-0 z-20 border-b ${theme.border} ${
+              darkMode ? "bg-[#0D1F35]/90" : "bg-white/90"
+            } backdrop-blur-xl`}
+          >
+            <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-6">
+              <div>
+                <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${theme.subtext}`}>
+                  Patient dashboard
+                </p>
+                <h1 className={`text-xl font-black tracking-tight ${theme.text}`}>
+                  {user.fullName || user.name || "Patient"} care overview
+                </h1>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className={`hidden h-9 items-center gap-2 rounded-lg border ${theme.border} ${theme.panelMuted} px-3 md:flex`}>
+                  <Icon name="search" className={theme.subtext} size={15} />
+                  <input
+                    className={`w-64 bg-transparent text-sm outline-none ${theme.text} placeholder:text-slate-400`}
+                    placeholder="Search records, doctors, hospitals"
+                  />
+                </div>
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text}`}
+                  aria-label="Toggle theme"
+                >
+                  <Icon name={darkMode ? "sun" : "moon"} size={16} />
+                </button>
+                <button className={`flex h-9 w-9 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text}`}>
+                  <Icon name="bell" size={16} />
+                </button>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8102E] text-xs font-black text-white">
+                  {(user.fullName || user.name || "PT").slice(0, 2).toUpperCase()}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <section className="space-y-5 p-4 lg:p-6">
+            {providerError && (
+              <div className="rounded-lg border border-[#FEF3C7] bg-[#FFFBEB] px-4 py-2 text-sm font-semibold text-[#92400E]">
+                {providerError}
+              </div>
+            )}
+
+            <div className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
+              <div className="space-y-5">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ["Care Score", "86", "+4.8%", "heart", "#C8102E"],
+                    ["Appointments", "12", "2 upcoming", "doctor", "#0891B2"],
+                    ["Reports", "28", "5 reviewed", "file", "#059669"],
+                    ["Emergency ETA", "5m", "nearest unit", "ambulance", "#F59E0B"],
+                  ].map(([title, value, sub, icon, color], index) => (
+                    <motion.div
+                      key={title}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.04 }}
+                      className={`${cardClass} p-4`}
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}16`, color }}>
+                          <Icon name={icon} size={15} />
+                        </div>
+                        <Icon name="trend" size={15} className="text-[#059669]" />
+                      </div>
+                      <p className={`text-2xl font-black ${theme.text}`}>{value}</p>
+                      <p className={`mt-1 text-xs font-bold ${theme.text}`}>{title}</p>
+                      <p className={`text-xs ${theme.subtext}`}>{sub}</p>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+                  <section className={`${cardClass} p-4`}>
+                    <PanelTitle title="Weekly Vitals" subtitle="Heart, oxygen, and temperature trend" theme={theme} />
+                    <div className="h-[268px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={weeklyVitals} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
+                          <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="day" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <Tooltip {...chartTooltip(theme)} />
+                          <Line type="monotone" dataKey="heart" stroke="#C8102E" strokeWidth={2.4} dot={false} />
+                          <Line type="monotone" dataKey="oxygen" stroke="#0891B2" strokeWidth={2.4} dot={false} />
+                          <Line type="monotone" dataKey="temp" stroke="#059669" strokeWidth={2.4} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </section>
+
+                  <section className={`${cardClass} p-4`}>
+                    <PanelTitle title="3D Health Signal" subtitle="Live visual health telemetry" theme={theme} />
+                    <div className={`mt-3 overflow-hidden rounded-lg border ${theme.border} ${theme.panelMuted}`}>
+                      <VitalsScene darkMode={darkMode} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {vitals.map((vital) => (
+                        <div key={vital.label} className={`${softClass} px-3 py-2`}>
+                          <p className={`text-[11px] font-semibold ${theme.subtext}`}>{vital.label}</p>
+                          <p className={`text-sm font-black ${vital.tone}`}>{vital.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+
+                <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+                  <section className={`${cardClass} p-4`}>
+                    <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
+                    <div className={`mt-3 h-[210px] space-y-2 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                      {chatMessages.map((message, index) => (
+                        <div
+                          key={`${message.sender}-${index}`}
+                          className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                            message.sender === "patient"
+                              ? "ml-auto bg-[#C8102E] text-white"
+                              : `${theme.panel} ${theme.text} border ${theme.border}`
+                          }`}
+                        >
+                          {message.text}
+                        </div>
+                      ))}
+                      {aiLoading && <p className={`text-xs font-bold ${theme.subtext}`}>AI is reviewing...</p>}
+                    </div>
+                    <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
+                      <textarea
+                        value={symptomText}
+                        onChange={(event) => setSymptomText(event.target.value)}
+                        className={`h-16 w-full resize-none bg-transparent px-1 text-sm outline-none ${theme.text} placeholder:text-slate-400`}
+                        placeholder="Describe symptoms or ask about your prescription..."
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          onClick={handleVoiceInput}
+                          className={`flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-bold ${
+                            isListening ? "bg-[#C8102E] text-white" : `border ${theme.border} ${theme.text}`
+                          }`}
+                        >
+                          <Icon name="mic" size={14} /> {isListening ? "Listening" : "Voice"}
+                        </button>
+                        <button
+                          onClick={handleAIMessage}
+                          disabled={!symptomText.trim() || aiLoading}
+                          className="flex h-8 items-center gap-2 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E] disabled:opacity-50"
+                        >
+                          <Icon name="send" size={14} /> Send
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className={`${cardClass} p-4`}>
+                    <PanelTitle title="Recovery Analytics" subtitle="Symptoms declining over time" theme={theme} />
+                    <div className="h-[322px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={recoveryTrend} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="symptomsFill" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="5%" stopColor="#0891B2" stopOpacity={0.28} />
+                              <stop offset="95%" stopColor="#0891B2" stopOpacity={0.02} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <Tooltip {...chartTooltip(theme)} />
+                          <Area type="monotone" dataKey="symptoms" stroke="#0891B2" strokeWidth={2.4} fill="url(#symptomsFill)" />
+                          <Bar dataKey="visits" fill="#C8102E" radius={[4, 4, 0, 0]} barSize={16} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </section>
+                </div>
+
+                <section className={`${cardClass} overflow-hidden`}>
+                  <div className={`border-b ${theme.border} p-4`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <PanelTitle title="Platform Doctors" subtitle="Approved doctors registered on MediCore" theme={theme} />
+                      <div className="flex flex-wrap gap-2">
+                        {doctorSpecs.map((spec) => (
+                          <button
+                            key={spec}
+                            onClick={() => setSelectedSpec(spec)}
+                            className={`h-8 rounded-lg px-3 text-xs font-bold transition ${
+                              selectedSpec === spec ? "bg-[#C8102E] text-white" : `border ${theme.border} ${theme.text}`
+                            }`}
+                          >
+                            {spec}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <ProviderTable providers={filteredDoctors} type="doctor" theme={theme} />
+                </section>
+
+                <EmergencyPanel
+                  active={emergencyMode}
+                  doctors={nearbyDoctors}
+                  hospitals={nearbyHospitals}
+                  drivers={nearbyDrivers}
+                  theme={theme}
+                />
+              </div>
+
+              <aside className="space-y-5">
+                <section className={`${cardClass} p-4`}>
+                  <div className="flex items-start justify-between">
+                    <PanelTitle title="Emergency Access" subtitle="Scan within 15 km" theme={theme} />
+                    <span className="rounded-md bg-[#FEE2E2] px-2 py-1 text-[11px] font-black text-[#991B1B]">
+                      Ready
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEmergencyMode(true);
+                      setActiveNav("Emergency");
+                    }}
+                    className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#C8102E] text-sm font-black text-white transition hover:bg-[#A30D26]"
+                  >
+                    <Icon name="phone" /> Emergency Button
+                  </button>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <MiniCount label="Doctors" value={nearbyDoctors.length} theme={theme} />
+                    <MiniCount label="Hospitals" value={nearbyHospitals.length} theme={theme} />
+                    <MiniCount label="Drivers" value={nearbyDrivers.length} theme={theme} />
+                  </div>
+                </section>
+
+                <section className={`${cardClass} p-4`}>
+                  <PanelTitle title="Department Mix" subtitle="Recent care categories" theme={theme} />
+                  <div className="mt-2 h-[210px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={departmentMix}
+                          innerRadius={56}
+                          outerRadius={78}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {departmentMix.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip {...chartTooltip(theme)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {departmentMix.map((item) => (
+                      <div key={item.name} className="flex items-center gap-2 text-xs">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className={theme.subtext}>{item.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className={`${cardClass} p-4`}>
+                  <PanelTitle title="Ambulance Drivers" subtitle="Platform registered drivers" theme={theme} />
+                  <div className="mt-3 space-y-2">
+                    {providers.ambulanceDrivers.map((driver) => (
+                      <ProviderRow key={driver._id || driver.vehicleNumber} provider={driver} type="driver" theme={theme} />
+                    ))}
+                  </div>
+                </section>
+
+                <section className={`${cardClass} p-4`}>
+                  <PanelTitle title="History & Prescriptions" subtitle="Latest records and medication" theme={theme} />
+                  <div className="mt-3 space-y-2">
+                    {records.map((record) => (
+                      <div key={record.title} className={`${softClass} p-3`}>
+                        <p className={`text-sm font-black ${theme.text}`}>{record.title}</p>
+                        <p className={`text-xs ${theme.subtext}`}>{record.doctor} - {record.date}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`mt-3 border-t ${theme.border} pt-3`}>
+                    {prescriptions.map((item) => (
+                      <div key={item.medicine} className="flex items-center justify-between py-1.5">
+                        <div>
+                          <p className={`text-xs font-black ${theme.text}`}>{item.medicine}</p>
+                          <p className={`text-[11px] ${theme.subtext}`}>{item.schedule}</p>
+                        </div>
+                        <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+                          {item.days}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+const PanelTitle = ({ title, subtitle, theme }) => (
+  <div>
+    <h2 className={`text-base font-black tracking-tight ${theme.text}`}>{title}</h2>
+    <p className={`mt-0.5 text-xs font-medium ${theme.subtext}`}>{subtitle}</p>
+  </div>
+);
+
+const MiniCount = ({ label, value, theme }) => (
+  <div className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-2 text-center`}>
+    <p className={`text-lg font-black ${theme.text}`}>{value}</p>
+    <p className={`text-[11px] font-semibold ${theme.subtext}`}>{label}</p>
+  </div>
+);
+
+const ProviderTable = ({ providers, type, theme }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full min-w-[680px] text-left">
+      <thead className={`${theme.panelMuted} ${theme.subtext}`}>
+        <tr className="text-[11px] uppercase tracking-[0.12em]">
+          <th className="px-4 py-3 font-black">Provider</th>
+          <th className="px-4 py-3 font-black">Specialty</th>
+          <th className="px-4 py-3 font-black">Distance</th>
+          <th className="px-4 py-3 font-black">Rating</th>
+          <th className="px-4 py-3 font-black">Status</th>
+          <th className="px-4 py-3 font-black">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {providers.map((provider) => (
+          <tr key={provider._id || provider.email || provider.name} className={`border-t ${theme.border}`}>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0891B2]/10 text-[#0891B2]">
+                  <Icon name={type === "doctor" ? "doctor" : "ambulance"} />
+                </div>
+                <div>
+                  <p className={`text-sm font-black ${theme.text}`}>{provider.name || provider.fullName}</p>
+                  <p className={`text-xs ${theme.subtext}`}>{provider.patients || 120} patients</p>
+                </div>
+              </div>
+            </td>
+            <td className={`px-4 py-3 text-sm font-semibold ${theme.text}`}>
+              {provider.specialization || "General Medicine"}
+            </td>
+            <td className={`px-4 py-3 text-sm ${theme.subtext}`}>{provider.distance || 7.5} km</td>
+            <td className={`px-4 py-3 text-sm font-bold ${theme.text}`}>{provider.rating || 4.7}</td>
+            <td className="px-4 py-3">
+              <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+                {(provider.status || "active").toUpperCase()}
+              </span>
+            </td>
+            <td className="px-4 py-3">
+              <button className="h-8 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
+                Book
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const ProviderRow = ({ provider, type, theme }) => {
+  const isDoctor = type === "doctor";
+  return (
+    <div className={`flex items-center justify-between rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isDoctor ? "bg-[#0891B2]/10 text-[#0891B2]" : "bg-[#C8102E]/10 text-[#C8102E]"}`}>
+          <Icon name={isDoctor ? "doctor" : "ambulance"} size={15} />
+        </div>
+        <div className="min-w-0">
+          <p className={`truncate text-sm font-black ${theme.text}`}>{provider.name || provider.fullName}</p>
+          <p className={`truncate text-xs ${theme.subtext}`}>
+            {provider.vehicleNumber || provider.specialization || "Available"} - {provider.distance || 4.5} km
+          </p>
+        </div>
+      </div>
+      <a
+        href={`tel:${provider.mobileNumber || "03001234567"}`}
+        className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C8102E] text-white"
+      >
+        <Icon name="phone" size={14} />
+      </a>
+    </div>
+  );
+};
+
+const EmergencyPanel = ({ active, doctors, hospitals, drivers, theme }) => (
+  <section className={`rounded-lg border ${active ? "border-[#C8102E]" : theme.border} ${theme.panel} overflow-hidden shadow-[0_14px_34px_rgba(10,22,40,0.06)]`}>
+    <div className="border-b border-[#C8102E]/20 bg-[#C8102E] px-4 py-3 text-white">
+      <h2 className="text-base font-black">Emergency Nearby Results</h2>
+      <p className="text-xs font-medium text-white/80">Doctors, hospitals, and ambulance drivers within 10 to 15 km.</p>
+    </div>
+    <div className="grid gap-3 p-4 lg:grid-cols-3">
+      <EmergencyColumn title="Nearby Doctors" icon="doctor" items={doctors} theme={theme} />
+      <EmergencyColumn title="Nearby Hospitals" icon="hospital" items={hospitals} theme={theme} />
+      <EmergencyColumn title="Nearby Ambulances" icon="ambulance" items={drivers} theme={theme} />
+    </div>
+  </section>
+);
+
+const EmergencyColumn = ({ title, icon, items, theme }) => (
+  <div className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+    <div className="mb-3 flex items-center gap-2">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C8102E]/10 text-[#C8102E]">
+        <Icon name={icon} size={15} />
+      </div>
+      <h3 className={`text-sm font-black ${theme.text}`}>{title}</h3>
+    </div>
+    <div className="space-y-2">
+      {items.map((item) => (
+        <div key={item._id || item.name} className={`rounded-lg border ${theme.border} ${theme.panel} p-3`}>
+          <p className={`text-sm font-black ${theme.text}`}>{item.name || item.fullName}</p>
+          <p className={`text-xs ${theme.subtext}`}>
+            {item.specialization || item.type || item.vehicleNumber || "Available"} - {item.distance || 6.5} km
+          </p>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+              {item.eta || (item.emergency ? "24/7" : "Open")}
+            </span>
+            <a href={`tel:${item.phone || item.mobileNumber || "03001234567"}`} className="text-xs font-black text-[#C8102E]">
+              Call
+            </a>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+export default PatientDashboard;

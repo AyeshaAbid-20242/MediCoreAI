@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
+import PatientDashboard from "./pages/patient/PatientDashboard";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRole }) => {
@@ -33,13 +34,14 @@ const App = () => {
         <Route path="/" element={<Navigate to="/login" />} />
 
         {/* Protected Routes - we will add dashboards here soon */}
-        {/* 
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute allowedRole="admin">
-              <AdminDashboard />
+        <Route
+          path="/patient/dashboard"
+          element={
+            <ProtectedRoute allowedRole="patient">
+              <PatientDashboard />
             </ProtectedRoute>
-          } />
-        */}
+          }
+        />
 
       </Routes>
     </BrowserRouter>

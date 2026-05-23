@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { getApiError } from "../../api/axios";
+import {
+  resetPassword,
+  sendForgotPasswordOtp,
+  verifyPasswordOtp,
+} from "../../api/authApi";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -22,11 +27,11 @@ const ForgotPassword = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/forgot-password", { email });
+      const res = await sendForgotPasswordOtp(email);
       setSuccess(res.data.message);
       setStep(2);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send OTP");
+      setError(getApiError(err, "Failed to send OTP"));
     } finally {
       setLoading(false);
     }
@@ -37,11 +42,11 @@ const ForgotPassword = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/verify-otp", { email, otp });
+      const res = await verifyPasswordOtp(email, otp);
       setSuccess(res.data.message);
       setStep(3);
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid OTP");
+      setError(getApiError(err, "Invalid OTP"));
     } finally {
       setLoading(false);
     }
@@ -56,7 +61,7 @@ const ForgotPassword = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/reset-password", {
+      const res = await resetPassword({
         email,
         otp,
         newPassword
@@ -64,7 +69,7 @@ const ForgotPassword = () => {
       setSuccess(res.data.message);
       setTimeout(() => navigate("/login"), 2000);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to reset password");
+      setError(getApiError(err, "Failed to reset password"));
     } finally {
       setLoading(false);
     }

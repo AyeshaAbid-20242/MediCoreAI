@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { getApiError } from "../../api/axios";
+import { registerUser } from "../../api/authApi";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -29,11 +30,11 @@ const Register = () => {
     setSuccess("");
 
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/register", formData);
+      const res = await registerUser(formData);
       setSuccess(res.data.message);
       setTimeout(() => navigate("/login"), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+      setError(getApiError(err, "Registration failed"));
     } finally {
       setLoading(false);
     }
