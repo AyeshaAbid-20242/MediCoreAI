@@ -5,6 +5,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import connectDB from "./Data/MongoDb.js";
+import appointmentRoutes from "./routes/appointmentRoutes.js";
+import doctorRoutes from "./routes/doctorRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +30,9 @@ console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "Loaded" : "Missing");
 console.log("MONGO_URI:", process.env.MONGO_URI ? "Loaded" : "Missing");
 
 app.use("/api/auth", userRoutes);
+app.use("/api/doctors", doctorRoutes);
+app.use("/api/appointments", appointmentRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 app.get("/", (req, res) => {
   res.send("API is running...");

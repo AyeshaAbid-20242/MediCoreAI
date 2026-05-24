@@ -1,7 +1,11 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
-import { sendTempPassword, sendOTPEmail } from "../helper/emailHelper.js";
+import {
+  sendDoctorRegistrationPassword,
+  sendTempPassword,
+  sendOTPEmail,
+} from "../helper/emailHelper.js";
 
 const generateTempPassword = () => {
   return Math.random().toString(36).slice(-8) + "@123";
@@ -93,8 +97,9 @@ const register = async (req, res) => {
     let tempPassword = null;
     let hashedPassword = null;
 
-    if (finalRole === "patient") {
+    if (finalRole === "patient" || finalRole === "doctor") {
       status = "approved";
+      if (finalRole === "doctor") status = "pending";
       tempPassword = generateTempPassword();
       hashedPassword = await bcrypt.hash(tempPassword, 10);
     } else {
@@ -132,6 +137,14 @@ const register = async (req, res) => {
       });
     }
 
+    if (finalRole === "doctor") {
+      await sendDoctorRegistrationPassword(email, finalName, tempPassword);
+
+      return res.status(201).json({
+        message: "Registration successful! Password sent to email. Please wait for admin approval.",
+      });
+    }
+
     return res.status(201).json({
       message: "Registration successful! Please wait for admin approval.",
       user,
@@ -151,6 +164,12 @@ const login = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role === "doctor" && user.status === "pending") {
+      return res.status(403).json({
+        message: "Your doctor account is pending admin approval.",
+      });
     }
 
     if (user.status === "pending") {
@@ -187,8 +206,14 @@ const login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        fullName: user.fullName,
         email: user.email,
         role: user.role,
+        status: user.status,
+        subscriptionStatus: user.subscriptionStatus,
+        packageName: user.packageName,
+        subscriptionStart: user.subscriptionStart,
+        subscriptionEnd: user.subscriptionEnd,
         isFirstLogin: user.isFirstLogin,
       },
     });

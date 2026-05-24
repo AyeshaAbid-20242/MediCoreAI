@@ -17,7 +17,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { payAppointment, requestAppointment } from "../../api/appointmentApi";
 import { getPatientProviders } from "../../api/authApi";
+import { getApiError } from "../../api/axios";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -281,6 +283,12 @@ const PatientDashboard = () => {
   const [providers, setProviders] = useState({ doctors: demoDoctors, ambulanceDrivers: demoDrivers });
   const [providerError, setProviderError] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [bookingDoctor, setBookingDoctor] = useState(null);
+  const [bookingForm, setBookingForm] = useState({ appointmentDate: "", appointmentTime: "", patientNotes: "" });
+  const [pendingAppointment, setPendingAppointment] = useState(null);
+  const [bookingMessage, setBookingMessage] = useState("");
+  const [bookingError, setBookingError] = useState("");
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   const theme = darkMode ? DARK : LIGHT;
   const user = useMemo(
@@ -365,6 +373,60 @@ const PatientDashboard = () => {
     recognition.onerror = () => setIsListening(false);
     recognition.onresult = (event) => setSymptomText(event.results[0][0].transcript);
     recognition.start();
+  };
+
+  const openBooking = (doctor) => {
+    setBookingDoctor(doctor);
+    setPendingAppointment(null);
+    setBookingMessage("");
+    setBookingError("");
+    setBookingForm({ appointmentDate: "", appointmentTime: "", patientNotes: "" });
+  };
+
+  const closeBooking = () => {
+    setBookingDoctor(null);
+    setPendingAppointment(null);
+    setBookingMessage("");
+    setBookingError("");
+  };
+
+  const handleAppointmentRequest = async (event) => {
+    event.preventDefault();
+    if (!bookingDoctor) return;
+
+    setBookingLoading(true);
+    setBookingError("");
+    setBookingMessage("");
+
+    try {
+      const res = await requestAppointment({
+        doctorId: bookingDoctor._id,
+        ...bookingForm,
+      });
+      setPendingAppointment(res.data.appointment);
+      setBookingMessage("Appointment requested. Please complete placeholder payment.");
+    } catch (error) {
+      setBookingError(getApiError(error, "Could not request appointment"));
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const handleAppointmentPayment = async () => {
+    if (!pendingAppointment?._id) return;
+
+    setBookingLoading(true);
+    setBookingError("");
+
+    try {
+      await payAppointment(pendingAppointment._id);
+      setBookingMessage("Payment marked as paid. The doctor can now accept your request.");
+      setPendingAppointment(null);
+    } catch (error) {
+      setBookingError(getApiError(error, "Could not complete payment"));
+    } finally {
+      setBookingLoading(false);
+    }
   };
 
   const navItems = [
@@ -682,7 +744,7 @@ const PatientDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <ProviderTable providers={filteredDoctors} type="doctor" theme={theme} />
+                  <ProviderTable providers={filteredDoctors} type="doctor" theme={theme} onBook={openBooking} />
                 </section>
 
                 <EmergencyPanel
@@ -786,6 +848,21 @@ const PatientDashboard = () => {
           </section>
         </main>
       </div>
+      {bookingDoctor && (
+        <BookingModal
+          doctor={bookingDoctor}
+          form={bookingForm}
+          setForm={setBookingForm}
+          pendingAppointment={pendingAppointment}
+          message={bookingMessage}
+          error={bookingError}
+          loading={bookingLoading}
+          onClose={closeBooking}
+          onRequest={handleAppointmentRequest}
+          onPay={handleAppointmentPayment}
+          theme={theme}
+        />
+      )}
     </div>
   );
 };
@@ -804,7 +881,7 @@ const MiniCount = ({ label, value, theme }) => (
   </div>
 );
 
-const ProviderTable = ({ providers, type, theme }) => (
+const ProviderTable = ({ providers, type, theme, onBook }) => (
   <div>
     <div className="space-y-3 p-3 md:hidden">
       {providers.map((provider) => (
@@ -828,7 +905,7 @@ const ProviderTable = ({ providers, type, theme }) => (
               </div>
             </div>
           </div>
-          <button className="mt-3 h-9 w-full rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
+          <button onClick={() => onBook?.(provider)} className="mt-3 h-9 w-full rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
             Book
           </button>
         </div>
@@ -872,7 +949,7 @@ const ProviderTable = ({ providers, type, theme }) => (
               </span>
             </td>
             <td className="px-4 py-3">
-              <button className="h-8 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
+              <button onClick={() => onBook?.(provider)} className="h-8 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
                 Book
               </button>
             </td>
@@ -881,6 +958,81 @@ const ProviderTable = ({ providers, type, theme }) => (
       </tbody>
       </table>
     </div>
+  </div>
+);
+
+const BookingModal = ({
+  doctor,
+  form,
+  setForm,
+  pendingAppointment,
+  message,
+  error,
+  loading,
+  onClose,
+  onRequest,
+  onPay,
+  theme,
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020617]/60 p-4 backdrop-blur-sm">
+    <section className={`w-full max-w-lg rounded-lg border ${theme.border} ${theme.panel} p-4 shadow-2xl`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={`text-lg font-black ${theme.text}`}>Request consultation</h2>
+          <p className={`text-sm font-semibold ${theme.subtext}`}>
+            {doctor.fullName || doctor.name} - Rs. {Number(doctor.consultationFee || 0).toLocaleString()}
+          </p>
+        </div>
+        <button onClick={onClose} className={`h-9 rounded-lg border ${theme.border} px-3 text-sm font-bold ${theme.text}`}>
+          Close
+        </button>
+      </div>
+
+      {message && <div className="mt-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-sm font-bold text-[#166534]">{message}</div>}
+      {error && <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">{error}</div>}
+
+      <form onSubmit={onRequest} className="mt-4 space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Date</label>
+            <input
+              type="date"
+              required
+              value={form.appointmentDate}
+              onChange={(event) => setForm({ ...form, appointmentDate: event.target.value })}
+              className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            />
+          </div>
+          <div>
+            <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Time</label>
+            <input
+              type="time"
+              required
+              value={form.appointmentTime}
+              onChange={(event) => setForm({ ...form, appointmentTime: event.target.value })}
+              className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            />
+          </div>
+        </div>
+        <div>
+          <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Notes</label>
+          <textarea
+            value={form.patientNotes}
+            onChange={(event) => setForm({ ...form, patientNotes: event.target.value })}
+            className={`h-20 w-full resize-none rounded-lg border ${theme.border} ${theme.panelMuted} px-3 py-2 text-sm ${theme.text} outline-none`}
+            placeholder="Briefly describe your concern"
+          />
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="submit" disabled={loading || Boolean(pendingAppointment)} className="h-10 rounded-lg bg-[#0A1628] px-4 text-sm font-black text-white disabled:opacity-50">
+            {loading ? "Working..." : "Request"}
+          </button>
+          <button type="button" onClick={onPay} disabled={loading || !pendingAppointment} className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50">
+            Pay placeholder
+          </button>
+        </div>
+      </form>
+    </section>
   </div>
 );
 

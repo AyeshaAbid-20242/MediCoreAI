@@ -3,8 +3,17 @@ import User from "../models/user.js";
 const getPlatformProviders = async (req, res) => {
   try {
     const providers = await User.find({
-      role: { $in: ["doctor", "ambulance_driver"] },
-      status: { $in: ["approved", "active"] },
+      $or: [
+        {
+          role: "doctor",
+          status: { $in: ["approved", "active"] },
+          subscriptionStatus: "active",
+        },
+        {
+          role: "ambulance_driver",
+          status: { $in: ["approved", "active"] },
+        },
+      ],
     }).select("-password -otp -otpExpiry");
 
     const doctors = providers.filter((provider) => provider.role === "doctor");
