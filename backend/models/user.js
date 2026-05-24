@@ -54,6 +54,43 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    bio: {
+      type: String,
+      default: "",
+    },
+    consultationFee: {
+      type: Number,
+      default: 0,
+    },
+    profileImageUrl: {
+      type: String,
+      default: "",
+    },
+    availableDays: {
+      type: [String],
+      default: [],
+    },
+    availableTimeSlots: {
+      type: [String],
+      default: [],
+    },
+    subscriptionStatus: {
+      type: String,
+      enum: ["none", "active", "expired"],
+      default: "none",
+    },
+    packageName: {
+      type: String,
+      default: "",
+    },
+    subscriptionStart: {
+      type: Date,
+      default: null,
+    },
+    subscriptionEnd: {
+      type: Date,
+      default: null,
+    },
 
     cnic: {
       type: String,

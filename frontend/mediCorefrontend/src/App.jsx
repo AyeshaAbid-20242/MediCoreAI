@@ -2,11 +2,13 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
+import DoctorDashboard from "./pages/doctor/DoctorDashboard";
+import PendingApproval from "./pages/doctor/PendingApproval";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 
 // Protected Route Component
-const ProtectedRoute = ({ children, allowedRole }) => {
+const ProtectedRoute = ({ children, allowedRole, requireApprovedDoctor = false }) => {
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -16,6 +18,10 @@ const ProtectedRoute = ({ children, allowedRole }) => {
 
   if (allowedRole && user.role !== allowedRole) {
     return <Navigate to="/login" />;
+  }
+
+  if (requireApprovedDoctor && !["approved", "active"].includes(user.status)) {
+    return <PendingApproval />;
   }
 
   return children;
@@ -49,6 +55,16 @@ const App = () => {
             <AdminDashboard />
           </ProtectedRoute>
         } />
+
+        <Route
+          path="/doctor/dashboard"
+          element={
+            <ProtectedRoute allowedRole="doctor" requireApprovedDoctor>
+              <DoctorDashboard />
+            </ProtectedRoute>
+          }
+        />
+
       </Routes>
     </BrowserRouter>
   );

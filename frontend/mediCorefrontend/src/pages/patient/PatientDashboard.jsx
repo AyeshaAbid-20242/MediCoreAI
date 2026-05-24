@@ -17,7 +17,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { payAppointment, requestAppointment } from "../../api/appointmentApi";
 import { getPatientProviders } from "../../api/authApi";
+import { getApiError } from "../../api/axios";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -123,10 +125,10 @@ const recoveryTrend = [
 ];
 
 const departmentMix = [
-  { name: "General", value: 36, color: "#0891B2" },
-  { name: "Cardio", value: 24, color: "#C8102E" },
-  { name: "Lab", value: 22, color: "#059669" },
-  { name: "Other", value: 18, color: "#F59E0B" },
+  { name: "General", value: 36, color: "#0891B2", dot: "bg-[#0891B2]" },
+  { name: "Cardio", value: 24, color: "#C8102E", dot: "bg-[#C8102E]" },
+  { name: "Lab", value: 22, color: "#059669", dot: "bg-[#059669]" },
+  { name: "Other", value: 18, color: "#F59E0B", dot: "bg-[#F59E0B]" },
 ];
 
 const records = [
@@ -146,6 +148,13 @@ const vitals = [
   { label: "Blood Pressure", value: "118/76", tone: "text-[#0891B2]" },
   { label: "O2 Saturation", value: "98%", tone: "text-[#059669]" },
   { label: "Temperature", value: "36.8 C", tone: "text-[#F59E0B]" },
+];
+
+const statCards = [
+  ["Care Score", "86", "+4.8%", "heart", "bg-[#C8102E]/10 text-[#C8102E]"],
+  ["Appointments", "12", "2 upcoming", "doctor", "bg-[#0891B2]/10 text-[#0891B2]"],
+  ["Reports", "28", "5 reviewed", "file", "bg-[#059669]/10 text-[#059669]"],
+  ["Emergency ETA", "5m", "nearest unit", "ambulance", "bg-[#F59E0B]/10 text-[#F59E0B]"],
 ];
 
 const chartTooltip = (theme) => ({
@@ -273,6 +282,13 @@ const PatientDashboard = () => {
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [providers, setProviders] = useState({ doctors: demoDoctors, ambulanceDrivers: demoDrivers });
   const [providerError, setProviderError] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [bookingDoctor, setBookingDoctor] = useState(null);
+  const [bookingForm, setBookingForm] = useState({ appointmentDate: "", appointmentTime: "", patientNotes: "" });
+  const [pendingAppointment, setPendingAppointment] = useState(null);
+  const [bookingMessage, setBookingMessage] = useState("");
+  const [bookingError, setBookingError] = useState("");
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   const theme = darkMode ? DARK : LIGHT;
   const user = useMemo(
@@ -359,6 +375,60 @@ const PatientDashboard = () => {
     recognition.start();
   };
 
+  const openBooking = (doctor) => {
+    setBookingDoctor(doctor);
+    setPendingAppointment(null);
+    setBookingMessage("");
+    setBookingError("");
+    setBookingForm({ appointmentDate: "", appointmentTime: "", patientNotes: "" });
+  };
+
+  const closeBooking = () => {
+    setBookingDoctor(null);
+    setPendingAppointment(null);
+    setBookingMessage("");
+    setBookingError("");
+  };
+
+  const handleAppointmentRequest = async (event) => {
+    event.preventDefault();
+    if (!bookingDoctor) return;
+
+    setBookingLoading(true);
+    setBookingError("");
+    setBookingMessage("");
+
+    try {
+      const res = await requestAppointment({
+        doctorId: bookingDoctor._id,
+        ...bookingForm,
+      });
+      setPendingAppointment(res.data.appointment);
+      setBookingMessage("Appointment requested. Please complete placeholder payment.");
+    } catch (error) {
+      setBookingError(getApiError(error, "Could not request appointment"));
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const handleAppointmentPayment = async () => {
+    if (!pendingAppointment?._id) return;
+
+    setBookingLoading(true);
+    setBookingError("");
+
+    try {
+      await payAppointment(pendingAppointment._id);
+      setBookingMessage("Payment marked as paid. The doctor can now accept your request.");
+      setPendingAppointment(null);
+    } catch (error) {
+      setBookingError(getApiError(error, "Could not complete payment"));
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
   const navItems = [
     ["Dashboard", "dashboard"],
     ["AI Chat", "brain"],
@@ -372,6 +442,67 @@ const PatientDashboard = () => {
 
   return (
     <div className={`min-h-screen ${theme.bg} font-sans transition-colors duration-300`}>
+      {mobileNavOpen && (
+        <button
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-[#020617]/60 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-[#1E2D45] bg-[#0A1628] shadow-2xl transition-transform duration-300 lg:hidden ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-16 items-center justify-between border-b border-[#1E2D45] px-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8102E] text-white">
+              <Icon name="heart" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-white">MediCore</p>
+              <p className="text-[11px] font-semibold text-[#94A3B8]">Patient console</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setMobileNavOpen(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#1E2D45] text-[#CBD5E1]"
+            aria-label="Close menu"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-1.5 overflow-y-auto p-3">
+          {navItems.map(([label, icon]) => (
+            <button
+              key={label}
+              onClick={() => {
+                setActiveNav(label);
+                setMobileNavOpen(false);
+              }}
+              className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
+                activeNav === label
+                  ? "bg-white text-[#0A1628]"
+                  : "text-[#94A3B8] hover:bg-[#15243A] hover:text-white"
+              }`}
+            >
+              <Icon name={icon} />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="border-t border-[#1E2D45] p-3">
+          <button
+            onClick={handleLogout}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#C8102E] text-sm font-bold text-white transition hover:bg-[#A30D26]"
+          >
+            <Icon name="close" size={15} /> Logout
+          </button>
+        </div>
+      </aside>
+
       <div className="flex min-h-screen">
         <aside className="sticky top-0 hidden h-screen w-[228px] shrink-0 border-r border-[#1E2D45] bg-[#0A1628] lg:flex lg:flex-col">
           <div className="flex h-16 items-center gap-3 border-b border-[#1E2D45] px-5">
@@ -418,16 +549,25 @@ const PatientDashboard = () => {
             } backdrop-blur-xl`}
           >
             <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-6">
-              <div>
-                <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${theme.subtext}`}>
-                  Patient dashboard
-                </p>
-                <h1 className={`text-xl font-black tracking-tight ${theme.text}`}>
-                  {user.fullName || user.name || "Patient"} care overview
-                </h1>
+              <div className="flex min-w-0 items-center gap-3">
+                <button
+                  onClick={() => setMobileNavOpen(true)}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text} lg:hidden`}
+                  aria-label="Open menu"
+                >
+                  <Icon name="menu" size={16} />
+                </button>
+                <div className="min-w-0">
+                  <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${theme.subtext}`}>
+                    Patient dashboard
+                  </p>
+                  <h1 className={`truncate text-lg font-black tracking-tight ${theme.text} sm:text-xl`}>
+                    {user.fullName || user.name || "Patient"} care overview
+                  </h1>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <div className={`hidden h-9 items-center gap-2 rounded-lg border ${theme.border} ${theme.panelMuted} px-3 md:flex`}>
                   <Icon name="search" className={theme.subtext} size={15} />
                   <input
@@ -462,12 +602,7 @@ const PatientDashboard = () => {
             <div className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    ["Care Score", "86", "+4.8%", "heart", "#C8102E"],
-                    ["Appointments", "12", "2 upcoming", "doctor", "#0891B2"],
-                    ["Reports", "28", "5 reviewed", "file", "#059669"],
-                    ["Emergency ETA", "5m", "nearest unit", "ambulance", "#F59E0B"],
-                  ].map(([title, value, sub, icon, color], index) => (
+                  {statCards.map(([title, value, sub, icon, colorClass], index) => (
                     <motion.div
                       key={title}
                       initial={{ opacity: 0, y: 8 }}
@@ -476,7 +611,7 @@ const PatientDashboard = () => {
                       className={`${cardClass} p-4`}
                     >
                       <div className="mb-3 flex items-center justify-between">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}16`, color }}>
+                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${colorClass}`}>
                           <Icon name={icon} size={15} />
                         </div>
                         <Icon name="trend" size={15} className="text-[#059669]" />
@@ -609,7 +744,7 @@ const PatientDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <ProviderTable providers={filteredDoctors} type="doctor" theme={theme} />
+                  <ProviderTable providers={filteredDoctors} type="doctor" theme={theme} onBook={openBooking} />
                 </section>
 
                 <EmergencyPanel
@@ -668,7 +803,7 @@ const PatientDashboard = () => {
                   <div className="grid grid-cols-2 gap-2">
                     {departmentMix.map((item) => (
                       <div key={item.name} className="flex items-center gap-2 text-xs">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className={`h-2 w-2 rounded-full ${item.dot}`} />
                         <span className={theme.subtext}>{item.name}</span>
                       </div>
                     ))}
@@ -713,6 +848,21 @@ const PatientDashboard = () => {
           </section>
         </main>
       </div>
+      {bookingDoctor && (
+        <BookingModal
+          doctor={bookingDoctor}
+          form={bookingForm}
+          setForm={setBookingForm}
+          pendingAppointment={pendingAppointment}
+          message={bookingMessage}
+          error={bookingError}
+          loading={bookingLoading}
+          onClose={closeBooking}
+          onRequest={handleAppointmentRequest}
+          onPay={handleAppointmentPayment}
+          theme={theme}
+        />
+      )}
     </div>
   );
 };
@@ -731,9 +881,39 @@ const MiniCount = ({ label, value, theme }) => (
   </div>
 );
 
-const ProviderTable = ({ providers, type, theme }) => (
-  <div className="overflow-x-auto">
-    <table className="w-full min-w-[680px] text-left">
+const ProviderTable = ({ providers, type, theme, onBook }) => (
+  <div>
+    <div className="space-y-3 p-3 md:hidden">
+      {providers.map((provider) => (
+        <div key={provider._id || provider.email || provider.name} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0891B2]/10 text-[#0891B2]">
+              <Icon name={type === "doctor" ? "doctor" : "ambulance"} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className={`truncate text-sm font-black ${theme.text}`}>{provider.name || provider.fullName}</p>
+              <p className={`mt-0.5 text-xs font-semibold ${theme.subtext}`}>
+                {provider.specialization || "General Medicine"} - {provider.distance || 7.5} km
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+                  {(provider.status || "active").toUpperCase()}
+                </span>
+                <span className={`rounded-md border ${theme.border} px-2 py-1 text-[11px] font-black ${theme.text}`}>
+                  Rating {provider.rating || 4.7}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button onClick={() => onBook?.(provider)} className="mt-3 h-9 w-full rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
+            Book
+          </button>
+        </div>
+      ))}
+    </div>
+
+    <div className="hidden overflow-x-auto md:block">
+      <table className="w-full min-w-[680px] text-left">
       <thead className={`${theme.panelMuted} ${theme.subtext}`}>
         <tr className="text-[11px] uppercase tracking-[0.12em]">
           <th className="px-4 py-3 font-black">Provider</th>
@@ -769,14 +949,90 @@ const ProviderTable = ({ providers, type, theme }) => (
               </span>
             </td>
             <td className="px-4 py-3">
-              <button className="h-8 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
+              <button onClick={() => onBook?.(provider)} className="h-8 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
                 Book
               </button>
             </td>
           </tr>
         ))}
       </tbody>
-    </table>
+      </table>
+    </div>
+  </div>
+);
+
+const BookingModal = ({
+  doctor,
+  form,
+  setForm,
+  pendingAppointment,
+  message,
+  error,
+  loading,
+  onClose,
+  onRequest,
+  onPay,
+  theme,
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020617]/60 p-4 backdrop-blur-sm">
+    <section className={`w-full max-w-lg rounded-lg border ${theme.border} ${theme.panel} p-4 shadow-2xl`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={`text-lg font-black ${theme.text}`}>Request consultation</h2>
+          <p className={`text-sm font-semibold ${theme.subtext}`}>
+            {doctor.fullName || doctor.name} - Rs. {Number(doctor.consultationFee || 0).toLocaleString()}
+          </p>
+        </div>
+        <button onClick={onClose} className={`h-9 rounded-lg border ${theme.border} px-3 text-sm font-bold ${theme.text}`}>
+          Close
+        </button>
+      </div>
+
+      {message && <div className="mt-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-sm font-bold text-[#166534]">{message}</div>}
+      {error && <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">{error}</div>}
+
+      <form onSubmit={onRequest} className="mt-4 space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Date</label>
+            <input
+              type="date"
+              required
+              value={form.appointmentDate}
+              onChange={(event) => setForm({ ...form, appointmentDate: event.target.value })}
+              className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            />
+          </div>
+          <div>
+            <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Time</label>
+            <input
+              type="time"
+              required
+              value={form.appointmentTime}
+              onChange={(event) => setForm({ ...form, appointmentTime: event.target.value })}
+              className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            />
+          </div>
+        </div>
+        <div>
+          <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Notes</label>
+          <textarea
+            value={form.patientNotes}
+            onChange={(event) => setForm({ ...form, patientNotes: event.target.value })}
+            className={`h-20 w-full resize-none rounded-lg border ${theme.border} ${theme.panelMuted} px-3 py-2 text-sm ${theme.text} outline-none`}
+            placeholder="Briefly describe your concern"
+          />
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="submit" disabled={loading || Boolean(pendingAppointment)} className="h-10 rounded-lg bg-[#0A1628] px-4 text-sm font-black text-white disabled:opacity-50">
+            {loading ? "Working..." : "Request"}
+          </button>
+          <button type="button" onClick={onPay} disabled={loading || !pendingAppointment} className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50">
+            Pay placeholder
+          </button>
+        </div>
+      </form>
+    </section>
   </div>
 );
 

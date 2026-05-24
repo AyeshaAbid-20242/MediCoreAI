@@ -181,18 +181,24 @@ const approveUser = async (req, res) => {
       return res.status(400).json({ message: "User is already approved" });
     }
 
-    const tempPassword = generateTempPassword();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const hasPlaceholderPassword = await bcrypt.compare("placeholder", user.password);
+    const tempPassword = hasPlaceholderPassword ? generateTempPassword() : null;
 
-    user.password = hashedPassword;
+    if (hasPlaceholderPassword) {
+      user.password = await bcrypt.hash(tempPassword, 10);
+    }
     user.status = "approved";
     user.isFirstLogin = true;
     await user.save();
 
-    await sendTempPassword(user.email, user.name, tempPassword);
+    if (hasPlaceholderPassword) {
+      await sendTempPassword(user.email, user.name, tempPassword);
+    }
 
     res.status(200).json({
-      message: `${user.name} has been approved. Temporary password sent to their email.`,
+      message: hasPlaceholderPassword
+        ? `${user.name} has been approved. Temporary password sent to their email.`
+        : `${user.name} has been approved. They can login with the password already sent to their email.`,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });

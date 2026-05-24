@@ -33,6 +33,29 @@ const sendTempPassword = async (email, name, tempPassword) => {
   }
 };
 
+const sendDoctorRegistrationPassword = async (email, name, tempPassword) => {
+  try {
+    const transporter = createTransporter();
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Your MediCore Doctor Login Password",
+      html: `
+        <h2>Welcome Dr. ${name}!</h2>
+        <p>Your doctor account registration has been received.</p>
+        <p>Your temporary password is:</p>
+        <h3 style="color: blue;">${tempPassword}</h3>
+        <p>Your account is still pending admin approval. You can login after approval using this password.</p>
+      `,
+    });
+
+    console.log("Doctor registration password email sent successfully");
+  } catch (error) {
+    console.error("Doctor password email sending failed:", error.message);
+  }
+};
+
 const sendOTPEmail = async (email, name, otp) => {
   try {
     const transporter = createTransporter();
@@ -56,4 +79,4 @@ const sendOTPEmail = async (email, name, otp) => {
   }
 };
 
-export { sendTempPassword, sendOTPEmail };
+export { sendTempPassword, sendDoctorRegistrationPassword, sendOTPEmail };
