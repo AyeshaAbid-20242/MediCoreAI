@@ -1,338 +1,280 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { getPendingUsers, getAllUsers, approveUser, rejectUser, deleteUser } from "../../api/adminApi";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import AdminLayout from "./AdminLayout";
+import Overview from "./tabs/Overview";
+import PendingApprovals from "./tabs/PendingApprovals";
+import AllUsers from "./tabs/AllUsers";
+import Doctors from "./tabs/Doctors";
+import Patients from "./tabs/Patients";
+import Ambulance from "./tabs/Ambulance";
+import Subscriptions from "./tabs/Subscriptions";
+import Appointments from "./tabs/Appointments";
+import Payments from "./tabs/Payments";
+import Analytics from "./tabs/Analytics";
+import Reviews from "./tabs/Reviews";
+import Messages from "./tabs/Messages";
+import Settings from "./tabs/Settings";
+
+import {
+  getAdminStats,
+  getPendingUsers,
+  getAllUsers,
+  approveUser,
+  rejectUser,
+  deleteUser,
+  getAllSubscriptions,
+  updateSubscription,
+  getAllAppointments,
+  cancelAppointment,
+  getAllPayments,
+  editUser,
+  blockUnblockUser,
+  resendTempPassword,
+  getRevenueStats,
+  getDoctorRatings,
+  sendEmailToUser,
+  broadcastEmail,
+  getSubscriptionPlans,
+  updateSubscriptionPlans,
+  changeAdminPassword,
+  getAllReviews,
+  deleteReview,
+} from "../../api/adminApi";
 
 const AdminDashboard = () => {
-  const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [darkMode, setDarkMode] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState({ text: "", type: "" });
+
+  // Data
+  const [stats, setStats] = useState({});
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  const [stats, setStats] = useState({ total: 0, doctors: 0, patients: 0, drivers: 0, pending: 0 });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [revenueStats, setRevenueStats] = useState({ revenueChart: [], registrationChart: [] });
+  const [doctorRatings, setDoctorRatings] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  // Filters
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const admin = JSON.parse(localStorage.getItem("user") || "{}");
 
-  const fetchData = async () => {
+  const theme = useMemo(() =>
+    darkMode ? {
+      bg: "bg-[#060D18]",
+      panel: "bg-[#0D1F35]",
+      panelMuted: "bg-[#0A1628]",
+      text: "text-[#E2E8F0]",
+      subtext: "text-[#94A3B8]",
+      border: "border-[#162940]",
+      header: "bg-[#0D1F35]/90",
+      line: "#162940",
+      darkMode,
+    } : {
+      bg: "bg-[#EEF3F6]",
+      panel: "bg-white",
+      panelMuted: "bg-[#F7FAFC]",
+      text: "text-[#0A1628]",
+      subtext: "text-[#64748B]",
+      border: "border-[#DDE6EE]",
+      header: "bg-white/90",
+      line: "#DDE6EE",
+      darkMode,
+    }, [darkMode]
+  );
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const pending = await getPendingUsers();
-      const all = await getAllUsers();
-
-      setPendingUsers(pending.users);
-      setAllUsers(all.users);
-
-      setStats({
-        total: all.users.length,
-        doctors: all.users.filter(u => u.role === "doctor").length,
-        patients: all.users.filter(u => u.role === "patient").length,
-        drivers: all.users.filter(u => u.role === "ambulance_driver").length,
-        pending: pending.users.length
-      });
+      const [
+        statsData,
+        pendingData,
+        usersData,
+        subsData,
+        appointsData,
+        paymentsData,
+        revenueData,
+        ratingsData,
+        reviewsData,
+        plansData,
+      ] = await Promise.all([
+        getAdminStats(),
+        getPendingUsers(),
+        getAllUsers(),
+        getAllSubscriptions(),
+        getAllAppointments(),
+        getAllPayments(),
+        getRevenueStats(),
+        getDoctorRatings(),
+        getAllReviews(),
+        getSubscriptionPlans(),
+      ]);
+      setStats(statsData);
+      setPendingUsers(pendingData.users);
+      setAllUsers(usersData.users);
+      setSubscriptions(subsData.subscriptions);
+      setAppointments(appointsData.appointments);
+      setPayments(paymentsData.payments);
+      setTotalRevenue(paymentsData.totalRevenue);
+      setRevenueStats(revenueData);
+      setDoctorRatings(ratingsData.ratings);
+      setReviews(reviewsData.reviews);
+      setSubscriptionPlans(plansData.plans);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (activeTab === "users") {
+      getAllUsers(roleFilter, statusFilter).then(data => setAllUsers(data.users));
+    }
+  }, [roleFilter, statusFilter, activeTab]);
+
+  const showMessage = (text, type = "success") => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage({ text: "", type: "" }), 3000);
   };
 
   const handleApprove = async (id) => {
-    try {
-      const res = await approveUser(id);
-      setMessage(res.message);
-      fetchData();
-      setTimeout(() => setMessage(""), 3000);
-    } catch (error) {
-      setMessage("Failed to approve user");
-    }
+    try { const res = await approveUser(id); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to approve user", "error"); }
   };
 
   const handleReject = async (id) => {
-    try {
-      const res = await rejectUser(id);
-      setMessage(res.message);
-      fetchData();
-      setTimeout(() => setMessage(""), 3000);
-    } catch (error) {
-      setMessage("Failed to reject user");
-    }
+    try { const res = await rejectUser(id); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to reject user", "error"); }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this user?")) return;
-    try {
-      const res = await deleteUser(id);
-      setMessage(res.message);
-      fetchData();
-      setTimeout(() => setMessage(""), 3000);
-    } catch (error) {
-      setMessage("Failed to delete user");
-    }
+    if (!window.confirm("Are you sure?")) return;
+    try { const res = await deleteUser(id); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to delete user", "error"); }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login");
+  const handleCancelAppointment = async (id) => {
+    if (!window.confirm("Cancel this appointment?")) return;
+    try { const res = await cancelAppointment(id); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to cancel appointment", "error"); }
   };
 
-  const bg = darkMode ? "bg-[#0f1623]" : "bg-gray-100";
-  const card = darkMode ? "bg-[#1a2235]" : "bg-white";
-  const text = darkMode ? "text-white" : "text-gray-800";
-  const subtext = darkMode ? "text-gray-400" : "text-gray-500";
-  const border = darkMode ? "border-gray-700" : "border-gray-200";
-  const hover = darkMode ? "hover:bg-[#243050]" : "hover:bg-gray-50";
+  const handleUpdateSubscription = async (id, data) => {
+    try { const res = await updateSubscription(id, data); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to update subscription", "error"); }
+  };
+
+  const handleEditUser = async (id, data) => {
+    try { const res = await editUser(id, data); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to edit user", "error"); }
+  };
+
+  const handleBlockUnblock = async (id) => {
+    try { const res = await blockUnblockUser(id); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to block/unblock user", "error"); }
+  };
+
+  const handleResendPassword = async (id) => {
+    try { const res = await resendTempPassword(id); showMessage(res.message); }
+    catch { showMessage("Failed to resend password", "error"); }
+  };
+
+  const handleSendEmail = async (id, data) => {
+    try { const res = await sendEmailToUser(id, data); showMessage(res.message); }
+    catch { showMessage("Failed to send email", "error"); }
+  };
+
+  const handleBroadcastEmail = async (data) => {
+    try { const res = await broadcastEmail(data); showMessage(res.message); }
+    catch { showMessage("Failed to broadcast email", "error"); }
+  };
+
+  const handleUpdatePlans = async (data) => {
+    try { const res = await updateSubscriptionPlans(data); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to update plans", "error"); }
+  };
+
+  const handleChangePassword = async (data) => {
+    try { const res = await changeAdminPassword(data); showMessage(res.message); }
+    catch (err) { showMessage(err.response?.data?.message || "Failed to change password", "error"); }
+  };
+
+  const handleDeleteReview = async (id) => {
+    if (!window.confirm("Delete this review?")) return;
+    try { const res = await deleteReview(id); showMessage(res.message); fetchData(); }
+    catch { showMessage("Failed to delete review", "error"); }
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Name", "Email", "Role", "Status", "Joined"];
+    const rows = allUsers.map(u => [u.name, u.email, u.role, u.status, new Date(u.createdAt).toLocaleDateString()]);
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "users.csv";
+    a.click();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#060D18]">
+        <div className="rounded-lg border border-[#1E2D45] bg-[#0D1F35] px-6 py-5 text-sm font-black text-white shadow">
+          Loading admin dashboard...
+        </div>
+      </div>
+    );
+  }
+
+  const tabProps = { theme, showMessage, fetchData };
+
+  const content = {
+    overview: <Overview stats={stats} setActiveTab={setActiveTab} allUsers={allUsers} appointments={appointments} payments={payments} {...tabProps} />,
+    pending: <PendingApprovals pendingUsers={pendingUsers} onApprove={handleApprove} onReject={handleReject} {...tabProps} />,
+    users: <AllUsers allUsers={allUsers} roleFilter={roleFilter} statusFilter={statusFilter} setRoleFilter={setRoleFilter} setStatusFilter={setStatusFilter} onDelete={handleDelete} onExport={handleExportCSV} onEdit={handleEditUser} onBlockUnblock={handleBlockUnblock} onResendPassword={handleResendPassword} {...tabProps} />,
+    doctors: <Doctors allUsers={allUsers} doctorRatings={doctorRatings} {...tabProps} />,
+    patients: <Patients allUsers={allUsers} {...tabProps} />,
+    ambulance: <Ambulance allUsers={allUsers} {...tabProps} />,
+    subscriptions: <Subscriptions subscriptions={subscriptions} onUpdate={handleUpdateSubscription} subscriptionPlans={subscriptionPlans} {...tabProps} />,
+    appointments: <Appointments appointments={appointments} onCancel={handleCancelAppointment} {...tabProps} />,
+    payments: <Payments payments={payments} totalRevenue={totalRevenue} onExport={handleExportCSV} {...tabProps} />,
+    analytics: <Analytics revenueStats={revenueStats} doctorRatings={doctorRatings} {...tabProps} />,
+    reviews: <Reviews reviews={reviews} onDelete={handleDeleteReview} {...tabProps} />,
+    messages: <Messages allUsers={allUsers} onSendEmail={handleSendEmail} onBroadcast={handleBroadcastEmail} {...tabProps} />,
+    settings: <Settings subscriptionPlans={subscriptionPlans} onUpdatePlans={handleUpdatePlans} onChangePassword={handleChangePassword} {...tabProps} />,
+  };
 
   return (
-    <div className={`min-h-screen ${bg} flex transition-colors duration-300`}>
-
-      {/* Sidebar */}
-      <div className={`w-64 ${card} border-r ${border} flex flex-col transition-colors duration-300`}>
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="bg-red-500 p-2 rounded-lg">
-              <span className="text-white text-lg">❤️</span>
-            </div>
-            <div>
-              <h1 className={`font-bold ${text}`}>MediCore</h1>
-              <p className={`text-xs ${subtext}`}>Enterprise Health OS</p>
-            </div>
-          </div>
+    <AdminLayout
+      admin={admin}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      darkMode={darkMode}
+      setDarkMode={setDarkMode}
+      theme={theme}
+      pendingCount={stats.pendingApprovals || 0}
+    >
+      {/* Message */}
+      {message.text && (
+        <div className={`mb-4 rounded-lg border px-4 py-3 text-sm font-semibold
+          ${message.type === "error"
+            ? "border-red-500/30 bg-red-500/10 text-red-400"
+            : "border-green-500/30 bg-green-500/10 text-green-400"}`}>
+          {message.text}
         </div>
-
-        {/* Nav Items */}
-        <nav className="flex-1 p-4 space-y-1">
-          {[
-            { id: "overview", icon: "📊", label: "Overview" },
-            { id: "pending", icon: "⏳", label: "Pending Approvals" },
-            { id: "users", icon: "👥", label: "All Users" },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors duration-200
-                ${activeTab === item.id
-                  ? "bg-red-500 text-white"
-                  : `${subtext} ${hover}`
-                }`}
-            >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-              {item.id === "pending" && stats.pending > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                  {stats.pending}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        {/* User Info & Logout */}
-        <div className={`p-4 border-t ${border}`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-              {user.name?.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p className={`text-sm font-medium ${text}`}>{user.name}</p>
-              <p className={`text-xs ${subtext}`}>Admin</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full text-sm text-red-400 hover:text-red-300 text-left px-2 py-1"
-          >
-            🚪 Logout
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-
-        {/* Top Bar */}
-        <div className={`${card} border-b ${border} px-6 py-4 flex items-center justify-between transition-colors duration-300`}>
-          <div>
-            <h2 className={`font-bold text-lg ${text}`}>
-              {activeTab === "overview" && "Dashboard Overview"}
-              {activeTab === "pending" && "Pending Approvals"}
-              {activeTab === "users" && "All Users"}
-            </h2>
-            <p className={`text-xs ${subtext}`}>Welcome back, {user.name}</p>
-          </div>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`p-2 rounded-full text-xl ${darkMode ? "bg-[#0f1623] text-yellow-400" : "bg-gray-200 text-gray-700"}`}
-          >
-            {darkMode ? "🌙" : "☀️"}
-          </button>
-        </div>
-
-        {/* Message */}
-        {message && (
-          <div className="mx-6 mt-4 bg-green-500/10 border border-green-500 text-green-400 px-4 py-3 rounded-lg text-sm">
-            {message}
-          </div>
-        )}
-
-        <div className="flex-1 p-6 overflow-auto">
-
-          {/* Overview Tab */}
-          {activeTab === "overview" && (
-            <div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {[
-                  { label: "Total Users", value: stats.total, icon: "👥", color: "blue" },
-                  { label: "Doctors", value: stats.doctors, icon: "👨‍⚕️", color: "green" },
-                  { label: "Patients", value: stats.patients, icon: "🏥", color: "purple" },
-                  { label: "Drivers", value: stats.drivers, icon: "🚑", color: "orange" },
-                ].map((stat) => (
-                  <div key={stat.label} className={`${card} p-5 rounded-xl border ${border} transition-colors duration-300`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-2xl">{stat.icon}</span>
-                    </div>
-                    <p className={`text-2xl font-bold ${text}`}>{stat.value}</p>
-                    <p className={`text-sm ${subtext}`}>{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Pending Alert */}
-              {stats.pending > 0 && (
-                <div
-                  onClick={() => setActiveTab("pending")}
-                  className="bg-red-500/10 border border-red-500 text-red-400 px-5 py-4 rounded-xl cursor-pointer hover:bg-red-500/20 transition"
-                >
-                  ⚠️ You have <strong>{stats.pending}</strong> pending approval{stats.pending > 1 ? "s" : ""} waiting for your review.
-                  <span className="underline ml-2">Click to review →</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Pending Approvals Tab */}
-          {activeTab === "pending" && (
-            <div className={`${card} rounded-xl border ${border} overflow-hidden`}>
-              {pendingUsers.length === 0 ? (
-                <div className="p-10 text-center">
-                  <p className="text-4xl mb-3">✅</p>
-                  <p className={`${text} font-medium`}>No pending approvals</p>
-                  <p className={`${subtext} text-sm`}>All applications have been reviewed</p>
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className={`border-b ${border}`}>
-                      {["Name", "Email", "Role", "Details", "Actions"].map((h) => (
-                        <th key={h} className={`px-4 py-3 text-left text-xs font-medium ${subtext} uppercase`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingUsers.map((u) => (
-                      <tr key={u._id} className={`border-b ${border} ${hover} transition-colors`}>
-                        <td className={`px-4 py-3 text-sm font-medium ${text}`}>{u.name}</td>
-                        <td className={`px-4 py-3 text-sm ${subtext}`}>{u.email}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium
-                            ${u.role === "doctor" ? "bg-blue-500/20 text-blue-400" : "bg-orange-500/20 text-orange-400"}`}>
-                            {u.role === "doctor" ? "Doctor" : "Driver"}
-                          </span>
-                        </td>
-                        <td className={`px-4 py-3 text-xs ${subtext}`}>
-                          {u.role === "doctor" && `${u.specialization} • ${u.experience} yrs`}
-                          {u.role === "ambulance_driver" && `Vehicle: ${u.vehicleNumber}`}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleApprove(u._id)}
-                              className="bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs px-3 py-1 rounded-lg transition"
-                            >
-                              ✓ Approve
-                            </button>
-                            <button
-                              onClick={() => handleReject(u._id)}
-                              className="bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs px-3 py-1 rounded-lg transition"
-                            >
-                              ✗ Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {/* All Users Tab */}
-          {activeTab === "users" && (
-            <div className={`${card} rounded-xl border ${border} overflow-hidden`}>
-              {allUsers.length === 0 ? (
-                <div className="p-10 text-center">
-                  <p className={`${text} font-medium`}>No users found</p>
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className={`border-b ${border}`}>
-                      {["Name", "Email", "Role", "Status", "Joined", "Actions"].map((h) => (
-                        <th key={h} className={`px-4 py-3 text-left text-xs font-medium ${subtext} uppercase`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allUsers.map((u) => (
-                      <tr key={u._id} className={`border-b ${border} ${hover} transition-colors`}>
-                        <td className={`px-4 py-3 text-sm font-medium ${text}`}>{u.name}</td>
-                        <td className={`px-4 py-3 text-sm ${subtext}`}>{u.email}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium
-                            ${u.role === "doctor" ? "bg-blue-500/20 text-blue-400" :
-                              u.role === "patient" ? "bg-purple-500/20 text-purple-400" :
-                              "bg-orange-500/20 text-orange-400"}`}>
-                            {u.role === "ambulance_driver" ? "Driver" : u.role.charAt(0).toUpperCase() + u.role.slice(1)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium
-                            ${u.status === "active" ? "bg-green-500/20 text-green-400" :
-                              u.status === "approved" ? "bg-blue-500/20 text-blue-400" :
-                              u.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
-                              "bg-red-500/20 text-red-400"}`}>
-                            {u.status.charAt(0).toUpperCase() + u.status.slice(1)}
-                          </span>
-                        </td>
-                        <td className={`px-4 py-3 text-xs ${subtext}`}>
-                          {new Date(u.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleDelete(u._id)}
-                            className="bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs px-3 py-1 rounded-lg transition"
-                          >
-                            🗑️ Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
+      )}
+      {content[activeTab] || content.overview}
+    </AdminLayout>
   );
 };
 

@@ -25,10 +25,10 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
     status: {
-      type: String,
-      enum: ["pending", "approved", "rejected", "active"],
-      default: "pending",
-    },
+  type: String,
+  enum: ["pending", "approved", "rejected", "active", "blocked"],
+  default: "pending",
+},
     city: {
       type: String,
       default: null,
