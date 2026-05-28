@@ -6,7 +6,7 @@ import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import PendingApproval from "./pages/doctor/PendingApproval";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-
+import AmbulanceDashboard from "./pages/ambulance/AmbulanceDashboard";
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRole, requireApprovedDoctor = false }) => {
   const token = localStorage.getItem("token");
@@ -55,7 +55,11 @@ const App = () => {
             <AdminDashboard />
           </ProtectedRoute>
         } />
-
+<Route path="/ambulance/dashboard" element={
+  <ProtectedRoute allowedRole="ambulance_driver">
+    <AmbulanceDashboard />
+  </ProtectedRoute>
+} />
         <Route
           path="/doctor/dashboard"
           element={
