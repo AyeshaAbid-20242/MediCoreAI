@@ -66,6 +66,16 @@ const protect = async (req, res, next) => {
         .json({ message: "User not found" });
     }
 
+    if (req.user.status === "blocked") {
+      return res
+        .status(403)
+        .json({ message: "Your account has been blocked" });
+    }
+
+    if (req.user.role === "driver") {
+      req.user.role = "ambulance_driver";
+    }
+
     next();
   } catch (error) {
     res

@@ -1,6 +1,13 @@
 import Appointment from "../models/Appointment.js";
 import Review from "../models/Review.js";
 import User from "../models/user.js";
+import {
+  sendValidationError,
+  toNumber,
+  toStringArray,
+  trimString,
+  urlRegex,
+} from "../helper/validators.js";
 
 const doctorSelect = "-password -otp -otpExpiry";
 const activeDoctorStatus = ["approved", "active"];
@@ -45,13 +52,62 @@ const updateDoctorProfile = async (req, res) => {
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     });
+    const errors = [];
+
+    if (updates.name !== undefined) updates.name = trimString(updates.name);
+    if (updates.fullName !== undefined) updates.fullName = trimString(updates.fullName);
+    if (updates.city !== undefined) updates.city = trimString(updates.city);
+    if (updates.specialization !== undefined) {
+      updates.specialization = trimString(updates.specialization);
+    }
+    if (updates.licenseNumber !== undefined) {
+      updates.licenseNumber = trimString(updates.licenseNumber);
+    }
+    if (updates.pmdcNumber !== undefined) updates.pmdcNumber = trimString(updates.pmdcNumber);
+    if (updates.bio !== undefined) updates.bio = trimString(updates.bio);
+    if (updates.profileImageUrl !== undefined) {
+      updates.profileImageUrl = trimString(updates.profileImageUrl);
+      if (updates.profileImageUrl && !urlRegex.test(updates.profileImageUrl)) {
+        errors.push("Profile image URL must be a valid URL.");
+      }
+    }
+
+    if (updates.name !== undefined && updates.name.length < 2) {
+      errors.push("Name must be at least 2 characters.");
+    }
 
     if (updates.name && !updates.fullName) updates.fullName = updates.name;
     if (updates.fullName && !updates.name) updates.name = updates.fullName;
-    if (updates.experience !== undefined) updates.experience = Number(updates.experience) || 0;
-    if (updates.consultationFee !== undefined) {
-      updates.consultationFee = Number(updates.consultationFee) || 0;
+
+    if (updates.experience !== undefined) {
+      updates.experience = toNumber(updates.experience);
+      if (updates.experience === null || updates.experience < 0 || updates.experience > 70) {
+        errors.push("Experience must be between 0 and 70 years.");
+      }
     }
+
+    if (updates.consultationFee !== undefined) {
+      updates.consultationFee = toNumber(updates.consultationFee);
+      if (
+        updates.consultationFee === null ||
+        updates.consultationFee < 0 ||
+        updates.consultationFee > 100000
+      ) {
+        errors.push("Consultation fee must be between 0 and 100000.");
+      }
+    }
+
+    if (updates.availableDays !== undefined) {
+      updates.availableDays = toStringArray(updates.availableDays);
+      if (!updates.availableDays) errors.push("Available days must be a list.");
+    }
+
+    if (updates.availableTimeSlots !== undefined) {
+      updates.availableTimeSlots = toStringArray(updates.availableTimeSlots);
+      if (!updates.availableTimeSlots) errors.push("Available time slots must be a list.");
+    }
+
+    if (errors.length) return sendValidationError(res, errors);
 
     const doctor = await User.findByIdAndUpdate(req.user._id, updates, {
       new: true,
@@ -76,15 +132,23 @@ const activateDoctorSubscription = async (req, res) => {
     }
 
     const { packageName = "Professional", months = 1 } = req.body;
+    const finalMonths = toNumber(months);
+
+    if (!trimString(packageName) || !finalMonths || finalMonths < 1 || finalMonths > 12) {
+      return sendValidationError(res, [
+        "Package name is required and months must be between 1 and 12.",
+      ]);
+    }
+
     const start = new Date();
     const end = new Date(start);
-    end.setMonth(end.getMonth() + Number(months || 1));
+    end.setMonth(end.getMonth() + finalMonths);
 
     const doctor = await User.findByIdAndUpdate(
       req.user._id,
       {
         subscriptionStatus: "active",
-        packageName,
+        packageName: trimString(packageName),
         subscriptionStart: start,
         subscriptionEnd: end,
       },

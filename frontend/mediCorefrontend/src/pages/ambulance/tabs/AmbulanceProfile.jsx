@@ -77,14 +77,14 @@ const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
       )}
 
       <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-        <Field theme={theme} label="Full Name" name="name" value={form.name} onChange={handleChange} />
+        <Field theme={theme} label="Full Name" name="name" value={form.name} onChange={handleChange} required minLength={2} maxLength={80} />
         <Field theme={theme} label="City" name="city" value={form.city} onChange={handleChange} />
-        <Field theme={theme} label="Mobile Number" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} />
-        <Field theme={theme} label="Vehicle Number" name="vehicleNumber" value={form.vehicleNumber} onChange={handleChange} />
-        <Field theme={theme} label="Ambulance Type" name="ambulanceType" value={form.ambulanceType} onChange={handleChange} placeholder="e.g. Basic, Advanced, ICU" />
-        <Field theme={theme} label="Driving License Number" name="drivingLicenseNumber" value={form.drivingLicenseNumber} onChange={handleChange} />
-        <Field theme={theme} label="Experience (years)" name="driverExperience" type="number" value={form.driverExperience} onChange={handleChange} />
-        <Field theme={theme} label="Profile Image URL" name="profileImageUrl" value={form.profileImageUrl} onChange={handleChange} />
+        <Field theme={theme} label="Mobile Number" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} maxLength={20} />
+        <Field theme={theme} label="Vehicle Number" name="vehicleNumber" value={form.vehicleNumber} onChange={handleChange} maxLength={30} />
+        <Field theme={theme} label="Ambulance Type" name="ambulanceType" value={form.ambulanceType} onChange={handleChange} placeholder="e.g. Basic, Advanced, ICU" maxLength={60} />
+        <Field theme={theme} label="Driving License Number" name="drivingLicenseNumber" value={form.drivingLicenseNumber} onChange={handleChange} maxLength={60} />
+        <Field theme={theme} label="Experience (years)" name="driverExperience" type="number" value={form.driverExperience} onChange={handleChange} min={0} max={70} />
+        <Field theme={theme} label="Profile Image URL" name="profileImageUrl" value={form.profileImageUrl} onChange={handleChange} type="url" />
 
         {/* Checkboxes */}
         <div className="md:col-span-2">

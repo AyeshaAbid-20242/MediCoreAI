@@ -7,45 +7,43 @@ const navItems = [
   ["subscription", "Subscription"],
 ];
 
-const navIcon = {
-  overview: "⌁",
-  profile: "Dr",
-  appointments: "Ap",
-  payments: "Rs",
-  reviews: "★",
-  subscription: "Sub",
-};
-
-const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => (
-  <aside className="hidden min-h-screen w-64 shrink-0 border-r border-[#1E2D45] bg-[#0A1628] text-white lg:flex lg:flex-col">
-    <div className="border-b border-[#1E2D45] px-6 py-5">
+const DoctorSidebar = ({ activeTab, setActiveTab, onLogout, doctor }) => (
+  <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-[#1E2D45] bg-[#0A1628] lg:flex">
+    <div className="border-b border-[#1E2D45] px-5 py-5">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8102E] text-lg font-black">
-          M
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8102E]">
+          <span className="text-sm font-black text-white">M</span>
         </div>
         <div>
-          <p className="text-base font-black">MediCore</p>
-          <p className="text-xs font-semibold text-[#94A3B8]">Doctor console</p>
+          <p className="font-black text-white">MediCore</p>
+          <p className="text-xs text-[#94A3B8]">Doctor console</p>
         </div>
       </div>
     </div>
 
-    <nav className="flex-1 space-y-1.5 p-4">
+    <div className="border-b border-[#1E2D45] px-5 py-4">
+      <p className="truncate text-sm font-black text-white">
+        {doctor?.fullName || doctor?.name || "Doctor"}
+      </p>
+      <p className="truncate text-[11px] font-semibold text-[#94A3B8]">
+        {doctor?.specialization || "Practice hub"}
+      </p>
+    </div>
+
+    <nav className="flex-1 space-y-1 p-4">
+      <p className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#94A3B8]">
+        Navigation
+      </p>
       {navItems.map(([key, label]) => (
         <button
           key={key}
           onClick={() => setActiveTab(key)}
-          className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-bold transition ${
+          className={`flex h-10 w-full items-center rounded-lg px-3 text-left text-sm font-bold transition-colors ${
             activeTab === key
-              ? "bg-white text-[#0A1628]"
-              : "text-[#94A3B8] hover:bg-[#15243A] hover:text-white"
+              ? "bg-[#C8102E] text-white"
+              : "text-[#94A3B8] hover:bg-[#1E2D45] hover:text-white"
           }`}
         >
-          <span className={`flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-black ${
-            activeTab === key ? "bg-[#C8102E] text-white" : "bg-[#15243A] text-[#CBD5E1]"
-          }`}>
-            {navIcon[key]}
-          </span>
           {label}
         </button>
       ))}
@@ -54,9 +52,9 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout }) => (
     <div className="border-t border-[#1E2D45] p-4">
       <button
         onClick={onLogout}
-        className="h-10 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white transition hover:bg-[#A30D26]"
+        className="h-10 w-full rounded-lg border border-[#1E2D45] text-sm font-black text-[#94A3B8] transition hover:border-[#C8102E] hover:text-[#C8102E]"
       >
-        Logout
+        Sign Out
       </button>
     </div>
   </aside>

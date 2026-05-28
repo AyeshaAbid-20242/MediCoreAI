@@ -5,8 +5,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import connectDB from "./Data/MongoDb.js";
+import adminRoutes from "./routes/adminRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
+import patientRoutes from "./routes/patientRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import ambulanceRoutes from "./routes/ambulanceRoutes.js";
@@ -31,6 +33,8 @@ console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "Loaded" : "Missing");
 console.log("MONGO_URI:", process.env.MONGO_URI ? "Loaded" : "Missing");
 
 app.use("/api/auth", userRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/patients", patientRoutes);
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/reviews", reviewRoutes);

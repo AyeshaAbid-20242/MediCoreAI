@@ -5,9 +5,9 @@ export const createReview = (payload) => {
 };
 
 export const getDoctorReviews = () => {
-  return api.get("/reviews/doctor/me");
+  return api.get("/reviews/me");
 };
 
 export const getPublicDoctorReviews = (doctorId) => {
-  return api.get(`/reviews/doctor/${doctorId}`);
+  return api.get(`/reviews/doctors/${doctorId}`);
 };

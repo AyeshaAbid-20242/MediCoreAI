@@ -74,14 +74,14 @@ const DoctorProfile = ({ doctor, onUpdated, theme }) => {
       {error && <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm font-bold text-[#991B1B]">{error}</div>}
 
       <form onSubmit={handleSubmit} className="mt-5 grid gap-4 md:grid-cols-2">
-        <Field theme={theme} label="Full Name" name="name" value={form.name} onChange={handleChange} />
+        <Field theme={theme} label="Full Name" name="name" value={form.name} onChange={handleChange} required minLength={2} maxLength={80} />
         <Field theme={theme} label="City" name="city" value={form.city} onChange={handleChange} />
-        <Field theme={theme} label="Specialization" name="specialization" value={form.specialization} onChange={handleChange} />
-        <Field theme={theme} label="Experience" name="experience" type="number" value={form.experience} onChange={handleChange} />
-        <Field theme={theme} label="PMDC / License Number" name="licenseNumber" value={form.licenseNumber} onChange={handleChange} />
-        <Field theme={theme} label="PMDC Number" name="pmdcNumber" value={form.pmdcNumber} onChange={handleChange} />
-        <Field theme={theme} label="Consultation Fee" name="consultationFee" type="number" value={form.consultationFee} onChange={handleChange} />
-        <Field theme={theme} label="Profile Image URL" name="profileImageUrl" value={form.profileImageUrl} onChange={handleChange} />
+        <Field theme={theme} label="Specialization" name="specialization" value={form.specialization} onChange={handleChange} maxLength={80} />
+        <Field theme={theme} label="Experience" name="experience" type="number" value={form.experience} onChange={handleChange} min={0} max={70} />
+        <Field theme={theme} label="PMDC / License Number" name="licenseNumber" value={form.licenseNumber} onChange={handleChange} maxLength={60} />
+        <Field theme={theme} label="PMDC Number" name="pmdcNumber" value={form.pmdcNumber} onChange={handleChange} maxLength={60} />
+        <Field theme={theme} label="Consultation Fee" name="consultationFee" type="number" value={form.consultationFee} onChange={handleChange} min={0} max={100000} />
+        <Field theme={theme} label="Profile Image URL" name="profileImageUrl" value={form.profileImageUrl} onChange={handleChange} type="url" />
         <Field theme={theme} label="Available Days" name="availableDays" value={form.availableDays} onChange={handleChange} placeholder="Mon, Tue, Wed" />
         <Field theme={theme} label="Time Slots" name="availableTimeSlots" value={form.availableTimeSlots} onChange={handleChange} placeholder="10:00 AM, 4:00 PM" />
         <div className="md:col-span-2">
@@ -90,6 +90,7 @@ const DoctorProfile = ({ doctor, onUpdated, theme }) => {
             name="bio"
             value={form.bio}
             onChange={handleChange}
+            maxLength={1000}
             className={`h-28 w-full resize-none rounded-lg border ${theme.border} ${theme.panelMuted} px-3 py-2 text-sm ${theme.text} outline-none focus:border-[#C8102E]`}
           />
         </div>

@@ -18,6 +18,7 @@ import {
   YAxis,
 } from "recharts";
 import { payAppointment, requestAppointment } from "../../api/appointmentApi";
+import { requestAmbulance } from "../../api/ambulanceApi";
 import { getPatientProviders } from "../../api/authApi";
 import { getApiError } from "../../api/axios";
 
@@ -289,6 +290,11 @@ const PatientDashboard = () => {
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingError, setBookingError] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [ambulanceRequest, setAmbulanceRequest] = useState(null);
+  const [ambulanceForm, setAmbulanceForm] = useState({ pickupLocation: "", contactNumber: "", notes: "" });
+  const [ambulanceMessage, setAmbulanceMessage] = useState("");
+  const [ambulanceError, setAmbulanceError] = useState("");
+  const [ambulanceLoading, setAmbulanceLoading] = useState(false);
 
   const theme = darkMode ? DARK : LIGHT;
   const user = useMemo(
@@ -426,6 +432,43 @@ const PatientDashboard = () => {
       setBookingError(getApiError(error, "Could not complete payment"));
     } finally {
       setBookingLoading(false);
+    }
+  };
+
+  const openAmbulanceRequest = (driver) => {
+    setAmbulanceRequest(driver);
+    setAmbulanceForm({ pickupLocation: "", contactNumber: user.mobileNumber || "", notes: "" });
+    setAmbulanceMessage("");
+    setAmbulanceError("");
+  };
+
+  const closeAmbulanceRequest = () => {
+    setAmbulanceRequest(null);
+    setAmbulanceMessage("");
+    setAmbulanceError("");
+  };
+
+  const handleAmbulanceRequest = async (event) => {
+    event.preventDefault();
+    if (!ambulanceRequest) return;
+
+    setAmbulanceLoading(true);
+    setAmbulanceMessage("");
+    setAmbulanceError("");
+    try {
+      await requestAmbulance({
+        driverId: ambulanceRequest._id,
+        patientName: user.fullName || user.name || "Patient",
+        contactNumber: ambulanceForm.contactNumber,
+        pickupLocation: ambulanceForm.pickupLocation,
+        destination: "Nearest hospital",
+        notes: ambulanceForm.notes || "Emergency ambulance request from patient dashboard.",
+      });
+      setAmbulanceMessage("Ambulance request sent to driver.");
+    } catch (error) {
+      setAmbulanceError(getApiError(error, "Could not request ambulance"));
+    } finally {
+      setAmbulanceLoading(false);
     }
   };
 
@@ -752,6 +795,7 @@ const PatientDashboard = () => {
                   doctors={nearbyDoctors}
                   hospitals={nearbyHospitals}
                   drivers={nearbyDrivers}
+                  onRequestAmbulance={openAmbulanceRequest}
                   theme={theme}
                 />
               </div>
@@ -860,6 +904,19 @@ const PatientDashboard = () => {
           onClose={closeBooking}
           onRequest={handleAppointmentRequest}
           onPay={handleAppointmentPayment}
+          theme={theme}
+        />
+      )}
+      {ambulanceRequest && (
+        <AmbulanceRequestModal
+          driver={ambulanceRequest}
+          form={ambulanceForm}
+          setForm={setAmbulanceForm}
+          message={ambulanceMessage}
+          error={ambulanceError}
+          loading={ambulanceLoading}
+          onSubmit={handleAmbulanceRequest}
+          onClose={closeAmbulanceRequest}
           theme={theme}
         />
       )}
@@ -998,6 +1055,7 @@ const BookingModal = ({
             <input
               type="date"
               required
+              min={new Date().toISOString().slice(0, 10)}
               value={form.appointmentDate}
               onChange={(event) => setForm({ ...form, appointmentDate: event.target.value })}
               className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
@@ -1019,6 +1077,7 @@ const BookingModal = ({
           <textarea
             value={form.patientNotes}
             onChange={(event) => setForm({ ...form, patientNotes: event.target.value })}
+            maxLength={1000}
             className={`h-20 w-full resize-none rounded-lg border ${theme.border} ${theme.panelMuted} px-3 py-2 text-sm ${theme.text} outline-none`}
             placeholder="Briefly describe your concern"
           />
@@ -1029,6 +1088,75 @@ const BookingModal = ({
           </button>
           <button type="button" onClick={onPay} disabled={loading || !pendingAppointment} className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50">
             Pay placeholder
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+);
+
+const AmbulanceRequestModal = ({
+  driver,
+  form,
+  setForm,
+  message,
+  error,
+  loading,
+  onSubmit,
+  onClose,
+  theme,
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020617]/60 p-4">
+    <section className={`w-full max-w-lg rounded-lg border ${theme.border} ${theme.panel} p-5 shadow-2xl`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={`text-lg font-black ${theme.text}`}>Request ambulance</h2>
+          <p className={`text-sm font-semibold ${theme.subtext}`}>
+            {driver.fullName || driver.name} - {driver.vehicleNumber || "Ambulance"}
+          </p>
+        </div>
+        <button onClick={onClose} className={`h-9 rounded-lg border ${theme.border} px-3 text-sm font-bold ${theme.text}`}>
+          Close
+        </button>
+      </div>
+
+      {message && <div className="mt-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-sm font-bold text-[#166534]">{message}</div>}
+      {error && <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">{error}</div>}
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-3">
+        <div>
+          <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Pickup Location</label>
+          <input
+            required
+            value={form.pickupLocation}
+            onChange={(event) => setForm({ ...form, pickupLocation: event.target.value })}
+            className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            placeholder="Street, area, or nearby landmark"
+          />
+        </div>
+        <div>
+          <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Contact Number</label>
+          <input
+            required
+            value={form.contactNumber}
+            onChange={(event) => setForm({ ...form, contactNumber: event.target.value })}
+            className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            placeholder="03xx xxxxxxx"
+          />
+        </div>
+        <div>
+          <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Notes</label>
+          <textarea
+            value={form.notes}
+            onChange={(event) => setForm({ ...form, notes: event.target.value })}
+            maxLength={1000}
+            className={`h-20 w-full resize-none rounded-lg border ${theme.border} ${theme.panelMuted} px-3 py-2 text-sm ${theme.text} outline-none`}
+            placeholder="Optional emergency details"
+          />
+        </div>
+        <div className="flex justify-end">
+          <button disabled={loading || Boolean(message)} className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50">
+            {loading ? "Sending..." : "Send Request"}
           </button>
         </div>
       </form>
@@ -1061,7 +1189,7 @@ const ProviderRow = ({ provider, type, theme }) => {
   );
 };
 
-const EmergencyPanel = ({ active, doctors, hospitals, drivers, theme }) => (
+const EmergencyPanel = ({ active, doctors, hospitals, drivers, onRequestAmbulance, theme }) => (
   <section className={`rounded-lg border ${active ? "border-[#C8102E]" : theme.border} ${theme.panel} overflow-hidden shadow-[0_14px_34px_rgba(10,22,40,0.06)]`}>
     <div className="border-b border-[#C8102E]/20 bg-[#C8102E] px-4 py-3 text-white">
       <h2 className="text-base font-black">Emergency Nearby Results</h2>
@@ -1070,12 +1198,18 @@ const EmergencyPanel = ({ active, doctors, hospitals, drivers, theme }) => (
     <div className="grid gap-3 p-4 lg:grid-cols-3">
       <EmergencyColumn title="Nearby Doctors" icon="doctor" items={doctors} theme={theme} />
       <EmergencyColumn title="Nearby Hospitals" icon="hospital" items={hospitals} theme={theme} />
-      <EmergencyColumn title="Nearby Ambulances" icon="ambulance" items={drivers} theme={theme} />
+      <EmergencyColumn
+        title="Nearby Ambulances"
+        icon="ambulance"
+        items={drivers}
+        onRequestAmbulance={onRequestAmbulance}
+        theme={theme}
+      />
     </div>
   </section>
 );
 
-const EmergencyColumn = ({ title, icon, items, theme }) => (
+const EmergencyColumn = ({ title, icon, items, onRequestAmbulance, theme }) => (
   <div className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
     <div className="mb-3 flex items-center gap-2">
       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C8102E]/10 text-[#C8102E]">
@@ -1090,13 +1224,23 @@ const EmergencyColumn = ({ title, icon, items, theme }) => (
           <p className={`text-xs ${theme.subtext}`}>
             {item.specialization || item.type || item.vehicleNumber || "Available"} - {item.distance || 6.5} km
           </p>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between gap-2">
             <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
               {item.eta || (item.emergency ? "24/7" : "Open")}
             </span>
-            <a href={`tel:${item.phone || item.mobileNumber || "03001234567"}`} className="text-xs font-black text-[#C8102E]">
-              Call
-            </a>
+            <div className="flex items-center gap-2">
+              {onRequestAmbulance && item._id && (
+                <button
+                  onClick={() => onRequestAmbulance(item)}
+                  className="text-xs font-black text-[#0A1628]"
+                >
+                  Request
+                </button>
+              )}
+              <a href={`tel:${item.phone || item.mobileNumber || "03001234567"}`} className="text-xs font-black text-[#C8102E]">
+                Call
+              </a>
+            </div>
           </div>
         </div>
       ))}

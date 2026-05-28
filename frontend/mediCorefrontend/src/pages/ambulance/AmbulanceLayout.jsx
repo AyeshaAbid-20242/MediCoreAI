@@ -43,7 +43,7 @@ const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMod
               key={key}
               onClick={() => { setActiveTab(key); setMenuOpen(false); }}
               className={`h-10 w-full rounded-lg px-4 text-left text-sm font-bold transition
-                ${activeTab === key ? "bg-white text-[#0A1628]" : "text-[#94A3B8] hover:bg-[#15243A] hover:text-white"}`}
+                ${activeTab === key ? "bg-[#C8102E] text-white" : "text-[#94A3B8] hover:bg-[#1E2D45] hover:text-white"}`}
             >
               {label}
             </button>
@@ -95,17 +95,9 @@ const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMod
                 {/* Dark mode toggle */}
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} font-black ${theme.text}`}
+                  className={`flex h-10 w-16 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-xs font-black ${theme.text}`}
                 >
-                  {darkMode ? (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
+                  {darkMode ? "Light" : "Dark"}
                 </button>
 
                 {/* Driver Info */}

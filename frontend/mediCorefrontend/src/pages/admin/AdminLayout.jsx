@@ -41,7 +41,11 @@ const AdminLayout = ({ admin, activeTab, setActiveTab, darkMode, setDarkMode, th
             <button
               key={key}
               onClick={() => { setActiveTab(key); setMenuOpen(false); }}
-              className={`h-11 w-full rounded-lg px-4 text-left text-sm font-bold ${activeTab === key ? "bg-white text-[#0A1628]" : "text-[#94A3B8]"}`}
+              className={`h-11 w-full rounded-lg px-4 text-left text-sm font-bold ${
+                activeTab === key
+                  ? "bg-[#C8102E] text-white"
+                  : "text-[#94A3B8] hover:bg-[#1E2D45] hover:text-white"
+              }`}
             >
               {label}
             </button>
@@ -91,9 +95,9 @@ const AdminLayout = ({ admin, activeTab, setActiveTab, darkMode, setDarkMode, th
                 {/* Dark mode toggle */}
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg ${theme.text}`}
+                  className={`flex h-10 w-16 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-xs font-black ${theme.text}`}
                 >
-                  {darkMode ? "☀" : "◐"}
+                  {darkMode ? "Light" : "Dark"}
                 </button>
 
                 {/* Admin badge */}

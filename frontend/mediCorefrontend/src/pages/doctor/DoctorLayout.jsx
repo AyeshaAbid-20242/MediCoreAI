@@ -43,7 +43,9 @@ const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, 
                 setMenuOpen(false);
               }}
               className={`h-11 w-full rounded-lg px-4 text-left text-sm font-bold ${
-                activeTab === key ? "bg-white text-[#0A1628]" : "text-[#94A3B8]"
+                activeTab === key
+                  ? "bg-[#C8102E] text-white"
+                  : "text-[#94A3B8] hover:bg-[#1E2D45] hover:text-white"
               }`}
             >
               {label}
@@ -53,7 +55,7 @@ const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, 
       </div>
 
       <div className="flex">
-        <DoctorSidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
+        <DoctorSidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} doctor={doctor} />
         <main className="min-w-0 flex-1">
           <header className={`sticky top-0 z-20 border-b ${theme.border} ${theme.header} backdrop-blur-xl`}>
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 lg:px-6">
@@ -75,13 +77,21 @@ const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg font-black ${theme.text}`}
+                  className={`flex h-10 w-16 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-xs font-black ${theme.text}`}
                   aria-label="Toggle dark mode"
                 >
-                  {darkMode ? "☀" : "◐"}
+                  {darkMode ? "Light" : "Dark"}
                 </button>
                 <div className="rounded-lg bg-[#C8102E] px-3 py-2 text-xs font-black text-white">
                   {(doctor?.status || "pending").toUpperCase()}
+                </div>
+                <div className={`hidden items-center gap-2 rounded-lg border ${theme.border} ${theme.panel} px-3 py-2 lg:flex`}>
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#C8102E] text-xs font-black text-white">
+                    {(doctor?.fullName || doctor?.name || "D").charAt(0).toUpperCase()}
+                  </div>
+                  <span className={`text-sm font-black ${theme.text}`}>
+                    {doctor?.fullName || doctor?.name || "Doctor"}
+                  </span>
                 </div>
               </div>
             </div>

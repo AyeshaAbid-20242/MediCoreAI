@@ -12,6 +12,8 @@ const Register = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    password: "",
+    confirmPassword: "",
     role: "patient",
     specialization: "",
     experience: "",
@@ -25,14 +27,52 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
     setSuccess("");
 
+    const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim());
+    if (formData.name.trim().length < 2 || !emailIsValid) {
+      setError("Please enter a valid name and email.");
+      return;
+    }
+    if (
+      formData.password.length < 8 ||
+      !/[A-Za-z]/.test(formData.password) ||
+      !/\d/.test(formData.password)
+    ) {
+      setError("Password must be at least 8 characters and include a letter and a number.");
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (
+      formData.role === "doctor" &&
+      (!formData.specialization.trim() || !formData.experience || !formData.licenseNumber.trim())
+    ) {
+      setError("Specialization, experience and license number are required for doctors.");
+      return;
+    }
+    if (
+      formData.role === "ambulance_driver" &&
+      (!formData.licenseNumber.trim() || !formData.vehicleNumber.trim())
+    ) {
+      setError("License number and vehicle number are required for ambulance drivers.");
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const res = await registerUser(formData);
-      setSuccess(res.data.message);
-      setTimeout(() => navigate("/login"), 3000);
+      const { confirmPassword, ...payload } = formData;
+      const res = await registerUser(payload);
+      const tempPasswordText = res.data.tempPassword
+        ? ` Temporary password: ${res.data.tempPassword}`
+        : "";
+      const warningText = res.data.emailWarning ? ` ${res.data.emailWarning}` : "";
+      setSuccess(`${res.data.message}${warningText}${tempPasswordText}`);
+      setTimeout(() => navigate("/login"), res.data.tempPassword ? 9000 : 3000);
     } catch (err) {
       setError(getApiError(err, "Registration failed"));
     } finally {
@@ -93,6 +133,9 @@ const Register = () => {
               value={formData.name}
               onChange={handleChange}
               placeholder="Enter your full name"
+              required
+              minLength={2}
+              maxLength={80}
               className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                 ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
             />
@@ -107,6 +150,38 @@ const Register = () => {
               value={formData.email}
               onChange={handleChange}
               placeholder="Enter your email"
+              required
+              className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
+                ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
+            />
+          </div>
+
+          {/* Role */}
+          <div>
+            <label className="text-gray-400 text-sm mb-1 block">Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Create a password"
+              required
+              minLength={8}
+              className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
+                ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
+            />
+          </div>
+
+          <div>
+            <label className="text-gray-400 text-sm mb-1 block">Confirm Password</label>
+            <input
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              placeholder="Confirm your password"
+              required
+              minLength={8}
               className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                 ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
             />
@@ -139,6 +214,8 @@ const Register = () => {
                   value={formData.specialization}
                   onChange={handleChange}
                   placeholder="e.g. Cardiology, Neurology"
+                  required
+                  maxLength={80}
                   className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                     ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
                 />
@@ -151,6 +228,9 @@ const Register = () => {
                   value={formData.experience}
                   onChange={handleChange}
                   placeholder="e.g. 5"
+                  required
+                  min={0}
+                  max={70}
                   className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                     ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
                 />
@@ -163,6 +243,8 @@ const Register = () => {
                   value={formData.licenseNumber}
                   onChange={handleChange}
                   placeholder="Enter license number"
+                  required
+                  maxLength={60}
                   className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                     ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
                 />
@@ -181,6 +263,8 @@ const Register = () => {
                   value={formData.licenseNumber}
                   onChange={handleChange}
                   placeholder="Enter license number"
+                  required
+                  maxLength={60}
                   className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                     ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
                 />
@@ -193,6 +277,8 @@ const Register = () => {
                   value={formData.vehicleNumber}
                   onChange={handleChange}
                   placeholder="Enter vehicle number"
+                  required
+                  maxLength={30}
                   className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                     ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
                 />

@@ -156,9 +156,36 @@ import Appointment from "../models/Appointment.js";
 import Review from "../models/Review.js";
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
 import nodemailer from "nodemailer";
+import {
+  isStrongPassword,
+  isValidEmail,
+  isValidObjectId,
+  normalizeEmail,
+  sendValidationError,
+  toNumber,
+  trimString,
+} from "../helper/validators.js";
 
 const generateTempPassword = () => {
   return Math.random().toString(36).slice(-8) + "@123";
+};
+
+const allowedRoles = ["patient", "doctor", "ambulance_driver"];
+const allowedStatuses = ["pending", "approved", "rejected", "active", "blocked"];
+const allowedSubscriptionStatuses = ["none", "active", "expired"];
+const planFields = [
+  "basicMonthly",
+  "basicYearly",
+  "professionalMonthly",
+  "professionalYearly",
+  "premiumMonthly",
+  "premiumYearly",
+];
+
+const validateIdParam = (req, res) => {
+  if (isValidObjectId(req.params.id)) return true;
+  sendValidationError(res, ["Valid id is required."]);
+  return false;
 };
 
 const getPendingUsers = async (req, res) => {
@@ -176,6 +203,8 @@ const getPendingUsers = async (req, res) => {
 
 const approveUser = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.status === "approved" || user.status === "active") {
@@ -184,14 +213,18 @@ const approveUser = async (req, res) => {
     const hasPlaceholderPassword = await bcrypt.compare("placeholder", user.password);
     const tempPassword = hasPlaceholderPassword ? generateTempPassword() : null;
     if (hasPlaceholderPassword) {
+      const emailResult = await sendTempPassword(user.email, user.name, tempPassword);
+      if (!emailResult.sent) {
+        return res.status(502).json({
+          message: "Could not send temporary password email. User was not approved.",
+          error: emailResult.error,
+        });
+      }
       user.password = await bcrypt.hash(tempPassword, 10);
     }
     user.status = "approved";
     user.isFirstLogin = true;
     await user.save();
-    if (hasPlaceholderPassword) {
-      await sendTempPassword(user.email, user.name, tempPassword);
-    }
     res.status(200).json({
       message: hasPlaceholderPassword
         ? `${user.name} has been approved. Temporary password sent to their email.`
@@ -204,6 +237,8 @@ const approveUser = async (req, res) => {
 
 const rejectUser = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.status === "rejected") {
@@ -221,8 +256,18 @@ const getAllUsers = async (req, res) => {
   try {
     const { role, status } = req.query;
     let filter = { role: { $ne: "admin" } };
-    if (role) filter.role = role;
-    if (status) filter.status = status;
+    if (role) {
+      if (!allowedRoles.includes(role)) {
+        return sendValidationError(res, ["Invalid role filter."]);
+      }
+      filter.role = role;
+    }
+    if (status) {
+      if (!allowedStatuses.includes(status)) {
+        return sendValidationError(res, ["Invalid status filter."]);
+      }
+      filter.status = status;
+    }
     const users = await User.find(filter).select("-password");
     res.status(200).json({
       message: "Users fetched successfully",
@@ -236,6 +281,8 @@ const getAllUsers = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "admin") {
@@ -286,14 +333,24 @@ const getAllSubscriptions = async (req, res) => {
 const updateSubscription = async (req, res) => {
   try {
     const { status, packageName, months } = req.body;
+    if (!validateIdParam(req, res)) return;
+
+    const finalMonths = months === undefined ? null : toNumber(months);
+    if (!allowedSubscriptionStatuses.includes(status)) {
+      return sendValidationError(res, ["Invalid subscription status."]);
+    }
+    if (finalMonths !== null && (finalMonths < 1 || finalMonths > 12)) {
+      return sendValidationError(res, ["Subscription months must be between 1 and 12."]);
+    }
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     const start = new Date();
     const end = new Date(start);
-    if (months) end.setMonth(end.getMonth() + Number(months));
+    if (finalMonths) end.setMonth(end.getMonth() + finalMonths);
     user.subscriptionStatus = status;
-    if (packageName) user.packageName = packageName;
-    if (months) {
+    if (packageName) user.packageName = trimString(packageName);
+    if (finalMonths) {
       user.subscriptionStart = start;
       user.subscriptionEnd = end;
     }
@@ -318,6 +375,8 @@ const getAllAppointments = async (req, res) => {
 
 const cancelAppointment = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const appointment = await Appointment.findById(req.params.id);
     if (!appointment) return res.status(404).json({ message: "Appointment not found" });
     appointment.appointmentStatus = "cancelled";
@@ -348,18 +407,49 @@ const getAllPayments = async (req, res) => {
 const editUser = async (req, res) => {
   try {
     const { name, email, city, specialization, experience, consultationFee, vehicleNumber, ambulanceType } = req.body;
+    if (!validateIdParam(req, res)) return;
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "admin") return res.status(403).json({ message: "Cannot edit admin account" });
 
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (city) user.city = city;
-    if (specialization) user.specialization = specialization;
-    if (experience) user.experience = experience;
-    if (consultationFee) user.consultationFee = consultationFee;
-    if (vehicleNumber) user.vehicleNumber = vehicleNumber;
-    if (ambulanceType) user.ambulanceType = ambulanceType;
+    const finalExperience = experience === undefined ? undefined : toNumber(experience);
+    const finalFee = consultationFee === undefined ? undefined : toNumber(consultationFee);
+    const finalEmail = email === undefined ? undefined : normalizeEmail(email);
+    const errors = [];
+
+    if (name !== undefined && trimString(name).length < 2) {
+      errors.push("Name must be at least 2 characters.");
+    }
+    if (finalEmail !== undefined && !isValidEmail(finalEmail)) {
+      errors.push("A valid email is required.");
+    }
+    if (finalExperience !== undefined && (finalExperience < 0 || finalExperience > 70)) {
+      errors.push("Experience must be between 0 and 70 years.");
+    }
+    if (finalFee !== undefined && (finalFee < 0 || finalFee > 100000)) {
+      errors.push("Consultation fee must be between 0 and 100000.");
+    }
+    if (errors.length) return sendValidationError(res, errors);
+
+    if (finalEmail !== undefined && finalEmail !== user.email) {
+      const emailOwner = await User.findOne({ email: finalEmail });
+      if (emailOwner) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
+    }
+
+    if (name !== undefined) {
+      user.name = trimString(name);
+      user.fullName = trimString(name);
+    }
+    if (finalEmail !== undefined) user.email = finalEmail;
+    if (city !== undefined) user.city = trimString(city);
+    if (specialization !== undefined) user.specialization = trimString(specialization);
+    if (finalExperience !== undefined) user.experience = finalExperience;
+    if (finalFee !== undefined) user.consultationFee = finalFee;
+    if (vehicleNumber !== undefined) user.vehicleNumber = trimString(vehicleNumber);
+    if (ambulanceType !== undefined) user.ambulanceType = trimString(ambulanceType);
 
     await user.save();
     res.status(200).json({ message: "User updated successfully", user });
@@ -373,6 +463,8 @@ const editUser = async (req, res) => {
 // ==========================================
 const blockUnblockUser = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "admin") return res.status(403).json({ message: "Cannot block admin account" });
@@ -396,14 +488,24 @@ const blockUnblockUser = async (req, res) => {
 // ==========================================
 const resendTempPassword = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const tempPassword = Math.random().toString(36).slice(-8) + "@123";
+    const emailResult = await sendTempPassword(user.email, user.name, tempPassword);
+    if (!emailResult.sent) {
+      return res.status(502).json({
+        message: "Could not send temporary password email. Password was not changed.",
+        error: emailResult.error,
+      });
+    }
+
     user.password = await bcrypt.hash(tempPassword, 10);
+    user.isFirstLogin = true;
     await user.save();
 
-    await sendTempPassword(user.email, user.name, tempPassword);
     res.status(200).json({ message: `Temporary password sent to ${user.email}` });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -489,6 +591,12 @@ const getDoctorRatings = async (req, res) => {
 const sendEmailToUser = async (req, res) => {
   try {
     const { subject, message } = req.body;
+    if (!validateIdParam(req, res)) return;
+
+    if (!trimString(subject) || !trimString(message)) {
+      return sendValidationError(res, ["Subject and message are required."]);
+    }
+
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -503,11 +611,11 @@ const sendEmailToUser = async (req, res) => {
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: user.email,
-      subject,
+      subject: trimString(subject),
       html: `
         <h2>Message from MediCore Admin</h2>
         <p>Dear ${user.name},</p>
-        <p>${message}</p>
+        <p>${trimString(message)}</p>
         <br/>
         <p>Regards,<br/>MediCore Team</p>
       `,
@@ -525,6 +633,13 @@ const sendEmailToUser = async (req, res) => {
 const broadcastEmail = async (req, res) => {
   try {
     const { subject, message, role } = req.body;
+
+    if (!trimString(subject) || !trimString(message)) {
+      return sendValidationError(res, ["Subject and message are required."]);
+    }
+    if (role && role !== "all" && !allowedRoles.includes(role)) {
+      return sendValidationError(res, ["Invalid role filter."]);
+    }
 
     let filter = { role: { $ne: "admin" } };
     if (role && role !== "all") filter.role = role;
@@ -544,11 +659,11 @@ const broadcastEmail = async (req, res) => {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: user.email,
-        subject,
+        subject: trimString(subject),
         html: `
           <h2>Message from MediCore Admin</h2>
           <p>Dear ${user.name},</p>
-          <p>${message}</p>
+          <p>${trimString(message)}</p>
           <br/>
           <p>Regards,<br/>MediCore Team</p>
         `,
@@ -579,11 +694,29 @@ const getSubscriptionPlans = async (req, res) => {
 const updateSubscriptionPlans = async (req, res) => {
   try {
     const { role, basicMonthly, basicYearly, professionalMonthly, professionalYearly, premiumMonthly, premiumYearly } = req.body;
+    const planValues = {
+      basicMonthly,
+      basicYearly,
+      professionalMonthly,
+      professionalYearly,
+      premiumMonthly,
+      premiumYearly,
+    };
+    const errors = [];
+
+    if (!["doctor", "ambulance_driver"].includes(role)) errors.push("Invalid plan role.");
+    planFields.forEach((field) => {
+      const value = toNumber(planValues[field]);
+      if (value === null || value < 0) errors.push(`${field} must be a positive number.`);
+      planValues[field] = value;
+    });
+
+    if (errors.length) return sendValidationError(res, errors);
 
     const plan = await SubscriptionPlan.findOneAndUpdate(
       { role },
-      { basicMonthly, basicYearly, professionalMonthly, professionalYearly, premiumMonthly, premiumYearly },
-      { new: true, upsert: true }
+      planValues,
+      { new: true, upsert: true, runValidators: true }
     );
 
     res.status(200).json({ message: "Subscription plans updated successfully", plan });
@@ -598,6 +731,12 @@ const updateSubscriptionPlans = async (req, res) => {
 const changeAdminPassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !isStrongPassword(newPassword)) {
+      return sendValidationError(res, [
+        "Current password is required and new password must include at least 8 characters, a letter and a number.",
+      ]);
+    }
+
     const admin = await User.findById(req.user._id);
 
     const isMatch = await bcrypt.compare(currentPassword, admin.password);
@@ -634,6 +773,8 @@ const getAllReviews = async (req, res) => {
 // ==========================================
 const deleteReview = async (req, res) => {
   try {
+    if (!validateIdParam(req, res)) return;
+
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: "Review not found" });
 

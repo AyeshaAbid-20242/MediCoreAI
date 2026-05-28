@@ -16,8 +16,15 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+
+    const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim());
+    if (!emailIsValid || !formData.password) {
+      setError("Please enter a valid email and password.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await loginUser(formData);
@@ -30,6 +37,7 @@ const Login = () => {
       else if (user.role === "doctor") navigate("/doctor/dashboard");
       else if (user.role === "patient") navigate("/patient/dashboard");
       else if (user.role === "ambulance_driver") navigate("/ambulance/dashboard");
+      else setError(`Unsupported account role: ${user.role}`);
 
     } catch (err) {
       setError(getApiError(err, "Login failed"));
@@ -85,6 +93,7 @@ const Login = () => {
               value={formData.email}
               onChange={handleChange}
               placeholder="Enter your email"
+              required
               className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                 ${darkMode
                   ? "bg-[#0f1623] text-white border-gray-700"
@@ -101,6 +110,7 @@ const Login = () => {
               value={formData.password}
               onChange={handleChange}
               placeholder="Enter your password"
+              required
               className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
                 ${darkMode
                   ? "bg-[#0f1623] text-white border-gray-700"

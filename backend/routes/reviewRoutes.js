@@ -9,7 +9,9 @@ import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.post("/", protect, authorizeRoles("patient"), createReview);
+router.get("/me", protect, authorizeRoles("doctor"), getDoctorReviews);
 router.get("/doctor/me", protect, authorizeRoles("doctor"), getDoctorReviews);
+router.get("/doctors/:doctorId", getPublicDoctorReviews);
 router.get("/doctor/:doctorId", getPublicDoctorReviews);
 
 export default router;
