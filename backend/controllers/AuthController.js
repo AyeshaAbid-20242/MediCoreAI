@@ -7,6 +7,10 @@ import {
   sendOTPEmail,
 } from "../helper/emailHelper.js";
 import {
+  clearFailedLogins,
+  recordFailedLogin,
+} from "../middleware/rateLimitMiddleware.js";
+import {
   cnicRegex,
   isStrongPassword,
   isValidEmail,
@@ -287,6 +291,7 @@ const login = async (req, res) => {
     const user = await User.findOne({ email: finalEmail });
 
     if (!user) {
+      recordFailedLogin(req);
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -323,10 +328,13 @@ const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      recordFailedLogin(req);
       return res.status(400).json({
         message: "Invalid credentials",
       });
     }
+
+    clearFailedLogins(req);
 
     if (user.isFirstLogin) {
       user.isFirstLogin = false;

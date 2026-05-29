@@ -23,6 +23,7 @@ dotenv.config({
 
 const app = express();
 
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
 
@@ -41,6 +42,14 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/ambulance", ambulanceRoutes);
 app.get("/", (req, res) => {
   res.send("API is running...");
+});
+
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "medicore-api",
+    time: new Date().toISOString(),
+  });
 });
 
 const PORT = process.env.PORT || 5000;

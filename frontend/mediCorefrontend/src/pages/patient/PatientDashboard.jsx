@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import * as THREE from "three";
+import NearbyCareMap from "../../components/NearbyCareMap";
 import {
   Area,
   AreaChart,
@@ -21,6 +22,7 @@ import { payAppointment, requestAppointment } from "../../api/appointmentApi";
 import { requestAmbulance } from "../../api/ambulanceApi";
 import { getPatientProviders } from "../../api/authApi";
 import { getApiError } from "../../api/axios";
+import { analyzeSymptoms, getNearbyCare } from "../../api/patientApi";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -99,12 +101,23 @@ const demoDrivers = [
   { _id: "a3", name: "Tariq Mehmood", vehicleNumber: "AMB-309", ambulanceType: "Oxygen Support", status: "active", distance: 13.2, eta: "18 min", mobileNumber: "0302-9988776" },
 ];
 
-const hospitals = [
-  { name: "Gujranwala General Hospital", type: "Government", distance: 2.1, emergency: true, phone: "055-1234567", rating: 4.5 },
-  { name: "City Care Clinic", type: "Private", distance: 4.2, emergency: false, phone: "055-9876543", rating: 4.6 },
-  { name: "MediCare Hospital", type: "Private", distance: 8.6, emergency: true, phone: "055-1122334", rating: 4.4 },
-  { name: "Allied Teaching Hospital", type: "Government", distance: 14.3, emergency: true, phone: "055-7654321", rating: 4.3 },
-];
+const defaultLocation = { lat: 32.1877, lng: 74.1945 };
+
+const formatDistance = (item) => {
+  if (Number.isFinite(item?.distanceMeters)) {
+    return item.distanceMeters >= 1000
+      ? `${(item.distanceMeters / 1000).toFixed(1)} km`
+      : `${item.distanceMeters} m`;
+  }
+
+  if (Number.isFinite(item?.distance)) return `${item.distance} km`;
+  return "Distance unavailable";
+};
+
+const getOsmUrl = (item) => {
+  if (!Number.isFinite(item?.lat) || !Number.isFinite(item?.lng)) return null;
+  return `https://www.openstreetmap.org/?mlat=${item.lat}&mlon=${item.lng}#map=16/${item.lat}/${item.lng}`;
+};
 
 const weeklyVitals = [
   { day: "Mon", heart: 72, oxygen: 98, temp: 36.7 },
@@ -282,7 +295,12 @@ const PatientDashboard = () => {
   const [isListening, setIsListening] = useState(false);
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [providers, setProviders] = useState({ doctors: demoDoctors, ambulanceDrivers: demoDrivers });
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const [nearbyHospitals, setNearbyHospitals] = useState([]);
+  const [userLocation, setUserLocation] = useState(defaultLocation);
+  const [nearbyLoading, setNearbyLoading] = useState(true);
   const [providerError, setProviderError] = useState("");
+  const [locationStatus, setLocationStatus] = useState("Allow browser location to find care near you.");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [bookingDoctor, setBookingDoctor] = useState(null);
   const [bookingForm, setBookingForm] = useState({ appointmentDate: "", appointmentTime: "", patientNotes: "" });
@@ -307,19 +325,49 @@ const PatientDashboard = () => {
   );
 
   useEffect(() => {
-    const fetchProviders = async () => {
+    const loadNearbyCare = async (coords = defaultLocation) => {
+      setNearbyLoading(true);
       try {
-        const response = await getPatientProviders();
+        const response = await getNearbyCare({ lat: coords.lat, lng: coords.lng, radius: 15000 });
+        setUserLocation(coords);
+        setNearbyPlaces(response.data.places || []);
         setProviders({
-          doctors: response.data.doctors.length ? response.data.doctors : demoDoctors,
-          ambulanceDrivers: response.data.ambulanceDrivers.length ? response.data.ambulanceDrivers : demoDrivers,
+          doctors: response.data.doctors || [],
+          ambulanceDrivers: response.data.ambulanceDrivers || [],
         });
+        setNearbyHospitals(response.data.hospitals || []);
+        setProviderError("");
       } catch (error) {
-        setProviderError("Live provider API is unavailable, showing preview data.");
+        setNearbyPlaces([]);
+        setNearbyHospitals([]);
+        setProviderError("Nearby care service is temporarily unavailable. Please try again shortly.");
+        try {
+          const response = await getPatientProviders();
+          setProviders({
+            doctors: response.data.doctors || [],
+            ambulanceDrivers: response.data.ambulanceDrivers || [],
+          });
+        } catch {
+          setProviders({ doctors: [], ambulanceDrivers: [] });
+        }
+      } finally {
+        setNearbyLoading(false);
       }
     };
 
-    fetchProviders();
+    if (!navigator.geolocation) {
+      loadNearbyCare();
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationStatus("Using your current location for nearby care.");
+        loadNearbyCare({ lat: position.coords.latitude, lng: position.coords.longitude });
+      },
+      () => loadNearbyCare(),
+      { enableHighAccuracy: true, timeout: 7000 }
+    );
   }, []);
 
   const doctorSpecs = useMemo(() => {
@@ -334,7 +382,15 @@ const PatientDashboard = () => {
 
   const nearbyDoctors = providers.doctors.filter((doctor) => (doctor.distance || 7) <= 15);
   const nearbyDrivers = providers.ambulanceDrivers.filter((driver) => (driver.distance || 7) <= 15);
-  const nearbyHospitals = hospitals.filter((hospital) => hospital.distance <= 15);
+  const visibleHospitals = nearbyHospitals.filter((hospital) => (hospital.distanceMeters || 0) <= 15000);
+  const nearestByType = (types) =>
+    nearbyPlaces.find((place) => types.includes(place.type)) || null;
+  const nearbySummary = [
+    ["Nearest Hospital", nearestByType(["hospital", "emergency"])],
+    ["Nearest Clinic", nearestByType(["clinic"])],
+    ["Nearest Pharmacy", nearestByType(["pharmacy"])],
+    ["Total Places", { name: `${nearbyPlaces.length} found`, distanceMeters: null }],
+  ];
 
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
   const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
@@ -352,15 +408,18 @@ const PatientDashboard = () => {
     setChatMessages((messages) => [...messages, { sender: "patient", text }]);
     setSymptomText("");
     setAiLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    setChatMessages((messages) => [
-      ...messages,
-      {
-        sender: "ai",
-        text: `For "${text}", monitor severity, breathing, hydration, and duration. Use emergency care for chest pain, fainting, heavy bleeding, or severe breathing difficulty. This is guidance, not a diagnosis.`,
-      },
-    ]);
-    setAiLoading(false);
+
+    try {
+      const response = await analyzeSymptoms(text);
+      setChatMessages((messages) => [...messages, { sender: "ai", text: response.data.answer }]);
+    } catch (error) {
+      setChatMessages((messages) => [
+        ...messages,
+        { sender: "ai", text: getApiError(error, "Could not analyze symptoms right now.") },
+      ]);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleVoiceInput = () => {
@@ -641,8 +700,226 @@ const PatientDashboard = () => {
                 {providerError}
               </div>
             )}
+            <div className={`rounded-lg border ${theme.border} ${theme.panel} px-4 py-2 text-xs font-bold ${theme.subtext}`}>
+              {locationStatus} Nearby results are limited to 10-15 km.
+            </div>
 
-            <div className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
+            {activeNav === "AI Chat" && (
+              <section className={`${cardClass} p-4`}>
+                <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
+                <div className={`mt-3 h-[360px] space-y-2 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                  {chatMessages.map((message, index) => (
+                    <div
+                      key={`${message.sender}-${index}`}
+                      className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                        message.sender === "patient"
+                          ? "ml-auto bg-[#C8102E] text-white"
+                          : `${theme.panel} ${theme.text} border ${theme.border}`
+                      }`}
+                    >
+                      {message.text}
+                    </div>
+                  ))}
+                  {aiLoading && <p className={`text-xs font-bold ${theme.subtext}`}>AI is reviewing...</p>}
+                </div>
+                <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
+                  <textarea
+                    value={symptomText}
+                    onChange={(event) => setSymptomText(event.target.value)}
+                    className={`h-20 w-full resize-none bg-transparent px-1 text-sm outline-none ${theme.text} placeholder:text-slate-400`}
+                    placeholder="Describe symptoms or ask about your prescription..."
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={handleVoiceInput}
+                      className={`flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold ${
+                        isListening ? "bg-[#C8102E] text-white" : `border ${theme.border} ${theme.text}`
+                      }`}
+                    >
+                      <Icon name="mic" size={14} /> {isListening ? "Listening" : "Voice"}
+                    </button>
+                    <button
+                      onClick={handleAIMessage}
+                      disabled={!symptomText.trim() || aiLoading}
+                      className="flex h-9 items-center gap-2 rounded-lg bg-[#0A1628] px-4 text-xs font-black text-white transition hover:bg-[#C8102E] disabled:opacity-50"
+                    >
+                      <Icon name="send" size={14} /> Send
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {activeNav === "Doctors" && (
+              <section className={`${cardClass} overflow-hidden`}>
+                <div className={`border-b ${theme.border} p-4`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <PanelTitle title="Platform Doctors" subtitle="Approved doctors registered on MediCore" theme={theme} />
+                    <div className="flex flex-wrap gap-2">
+                      {doctorSpecs.map((spec) => (
+                        <button
+                          key={spec}
+                          onClick={() => setSelectedSpec(spec)}
+                          className={`h-8 rounded-lg px-3 text-xs font-bold transition ${
+                            selectedSpec === spec ? "bg-[#C8102E] text-white" : `border ${theme.border} ${theme.text}`
+                          }`}
+                        >
+                          {spec}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <ProviderTable providers={filteredDoctors} type="doctor" theme={theme} onBook={openBooking} />
+              </section>
+            )}
+
+            {activeNav === "Emergency" && (
+              <EmergencyPanel
+                active
+                doctors={nearbyDoctors}
+                hospitals={visibleHospitals}
+                drivers={nearbyDrivers}
+                onRequestAmbulance={openAmbulanceRequest}
+                theme={theme}
+              />
+            )}
+
+            {activeNav === "Hospitals" && (
+              <section className={`${cardClass} p-4`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <PanelTitle title="Nearby Care" subtitle="OpenStreetMap results within 15 km" theme={theme} />
+                  <span className={`rounded-md border ${theme.border} px-2 py-1 text-[11px] font-black ${theme.subtext}`}>
+                    {nearbyLoading ? "Scanning..." : locationStatus}
+                  </span>
+                </div>
+
+                {providerError && (
+                  <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">
+                    {providerError}
+                  </div>
+                )}
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {nearbySummary.map(([label, place]) => (
+                    <div key={label} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                      <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${theme.subtext}`}>{label}</p>
+                      <p className={`mt-2 truncate text-sm font-black ${theme.text}`}>{place?.name || "Not found"}</p>
+                      <p className={`mt-1 text-xs ${theme.subtext}`}>
+                        {place?.distanceMeters ? formatDistance(place) : "OpenStreetMap"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className={`mt-4 overflow-hidden rounded-lg border ${theme.border}`}>
+                  <NearbyCareMap userLocation={userLocation} places={nearbyPlaces} />
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {nearbyPlaces.map((place) => {
+                    const osmUrl = getOsmUrl(place);
+                    return (
+                      <div key={place.id || place.name} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className={`truncate text-sm font-black ${theme.text}`}>{place.name}</p>
+                            <p className={`mt-1 text-xs ${theme.subtext}`}>{place.address || place.category}</p>
+                          </div>
+                          <span className="shrink-0 rounded-md bg-[#E0F2FE] px-2 py-1 text-[11px] font-black text-[#075985]">
+                            {place.category}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+                            {formatDistance(place)}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            {place.phone && (
+                              <a href={`tel:${place.phone}`} className="text-xs font-black text-[#C8102E]">
+                                Call
+                              </a>
+                            )}
+                            {place.website && (
+                              <a href={place.website} target="_blank" rel="noreferrer" className="text-xs font-black text-[#0891B2]">
+                                Website
+                              </a>
+                            )}
+                            {osmUrl && (
+                              <a href={osmUrl} target="_blank" rel="noreferrer" className="text-xs font-black text-[#0891B2]">
+                                Map
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!nearbyLoading && nearbyPlaces.length === 0 && !providerError && (
+                  <div className={`${softClass} mt-4 p-6 text-sm font-bold ${theme.subtext}`}>
+                    No nearby healthcare places were found in OpenStreetMap for this radius.
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activeNav === "Records" && (
+              <section className={`${cardClass} p-4`}>
+                <PanelTitle title="History & Prescriptions" subtitle="Latest records and medication" theme={theme} />
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {records.map((record) => (
+                    <div key={record.title} className={`${softClass} p-3`}>
+                      <p className={`text-sm font-black ${theme.text}`}>{record.title}</p>
+                      <p className={`text-xs ${theme.subtext}`}>{record.doctor} - {record.date}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className={`mt-4 border-t ${theme.border} pt-4`}>
+                  {prescriptions.map((item) => (
+                    <div key={item.medicine} className="flex items-center justify-between py-2">
+                      <div>
+                        <p className={`text-sm font-black ${theme.text}`}>{item.medicine}</p>
+                        <p className={`text-xs ${theme.subtext}`}>{item.schedule}</p>
+                      </div>
+                      <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+                        {item.days}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {activeNav === "Payments" && (
+              <section className={`${cardClass} p-4`}>
+                <PanelTitle title="Payments" subtitle="Appointment payment history" theme={theme} />
+                <div className={`${softClass} mt-4 p-6 text-sm font-bold ${theme.subtext}`}>
+                  Paid appointment records will appear here after you book and pay for a consultation.
+                </div>
+              </section>
+            )}
+
+            {activeNav === "Settings" && (
+              <section className={`${cardClass} p-4`}>
+                <PanelTitle title="Settings" subtitle="Patient account information" theme={theme} />
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {[
+                    ["Name", user.fullName || user.name],
+                    ["Email", user.email],
+                    ["Role", user.role],
+                  ].map(([label, value]) => (
+                    <div key={label} className={`${softClass} p-3`}>
+                      <p className={`text-[11px] font-black uppercase tracking-wider ${theme.subtext}`}>{label}</p>
+                      <p className={`mt-1 text-sm font-black ${theme.text}`}>{value || "Not set"}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <div className={`${activeNav === "Dashboard" ? "grid" : "hidden"} gap-5 xl:grid-cols-[1.7fr_1fr]`}>
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {statCards.map(([title, value, sub, icon, colorClass], index) => (
@@ -793,7 +1070,7 @@ const PatientDashboard = () => {
                 <EmergencyPanel
                   active={emergencyMode}
                   doctors={nearbyDoctors}
-                  hospitals={nearbyHospitals}
+                  hospitals={visibleHospitals}
                   drivers={nearbyDrivers}
                   onRequestAmbulance={openAmbulanceRequest}
                   theme={theme}
@@ -819,7 +1096,7 @@ const PatientDashboard = () => {
                   </button>
                   <div className="mt-4 grid grid-cols-3 gap-2">
                     <MiniCount label="Doctors" value={nearbyDoctors.length} theme={theme} />
-                    <MiniCount label="Hospitals" value={nearbyHospitals.length} theme={theme} />
+                    <MiniCount label="Hospitals" value={visibleHospitals.length} theme={theme} />
                     <MiniCount label="Drivers" value={nearbyDrivers.length} theme={theme} />
                   </div>
                 </section>
@@ -1218,32 +1495,40 @@ const EmergencyColumn = ({ title, icon, items, onRequestAmbulance, theme }) => (
       <h3 className={`text-sm font-black ${theme.text}`}>{title}</h3>
     </div>
     <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item._id || item.name} className={`rounded-lg border ${theme.border} ${theme.panel} p-3`}>
-          <p className={`text-sm font-black ${theme.text}`}>{item.name || item.fullName}</p>
-          <p className={`text-xs ${theme.subtext}`}>
-            {item.specialization || item.type || item.vehicleNumber || "Available"} - {item.distance || 6.5} km
-          </p>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
-              {item.eta || (item.emergency ? "24/7" : "Open")}
-            </span>
-            <div className="flex items-center gap-2">
-              {onRequestAmbulance && item._id && (
-                <button
-                  onClick={() => onRequestAmbulance(item)}
-                  className="text-xs font-black text-[#0A1628]"
-                >
-                  Request
-                </button>
-              )}
-              <a href={`tel:${item.phone || item.mobileNumber || "03001234567"}`} className="text-xs font-black text-[#C8102E]">
-                Call
-              </a>
+      {items.map((item) => {
+        const osmUrl = getOsmUrl(item);
+        return (
+          <div key={item.id || item._id || item.name} className={`rounded-lg border ${theme.border} ${theme.panel} p-3`}>
+            <p className={`text-sm font-black ${theme.text}`}>{item.name || item.fullName}</p>
+            <p className={`text-xs ${theme.subtext}`}>
+              {item.specialization || item.category || item.type || item.vehicleNumber || "Available"} - {formatDistance(item)}
+            </p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+                {item.eta || (item.emergency ? "24/7" : "Open")}
+              </span>
+              <div className="flex items-center gap-2">
+                {onRequestAmbulance && item._id && (
+                  <button
+                    onClick={() => onRequestAmbulance(item)}
+                    className="text-xs font-black text-[#0A1628]"
+                  >
+                    Request
+                  </button>
+                )}
+                {osmUrl && (
+                  <a href={osmUrl} target="_blank" rel="noreferrer" className="text-xs font-black text-[#0891B2]">
+                    Map
+                  </a>
+                )}
+                <a href={`tel:${item.phone || item.mobileNumber || "03001234567"}`} className="text-xs font-black text-[#C8102E]">
+                  Call
+                </a>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   </div>
 );

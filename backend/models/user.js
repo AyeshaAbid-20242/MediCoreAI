@@ -43,6 +43,18 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: 80,
     },
+    latitude: {
+      type: Number,
+      default: null,
+      min: -90,
+      max: 90,
+    },
+    longitude: {
+      type: Number,
+      default: null,
+      min: -180,
+      max: 180,
+    },
     age: {
       type: Number,
       default: null,

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "check:email": "node scripts/checkEmail.js"
+    "check:email": "node scripts/checkEmail.js",
+    "check:openrouter": "node scripts/checkOpenRouter.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +21,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.2",
     "nodemailer": "^8.0.7",
+    "openai": "^6.39.1",
     "stripe": "^22.1.1"
   },
   "devDependencies": {
