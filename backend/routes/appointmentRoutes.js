@@ -12,9 +12,11 @@ import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.post("/", protect, authorizeRoles("patient"), requestAppointment);
+router.get("/me", protect, authorizeRoles("patient"), getPatientAppointments);
 router.get("/my", protect, authorizeRoles("patient"), getPatientAppointments);
 router.patch("/:id/pay", protect, authorizeRoles("patient"), payAppointment);
 
+router.get("/doctor/me", protect, authorizeRoles("doctor"), getDoctorAppointments);
 router.get("/doctor", protect, authorizeRoles("doctor"), getDoctorAppointments);
 router.patch("/:id/status", protect, authorizeRoles("doctor"), updateAppointmentStatus);
 router.patch("/:id/zoom", protect, authorizeRoles("doctor"), updateZoomLink);

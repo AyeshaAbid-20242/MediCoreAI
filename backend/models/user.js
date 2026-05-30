@@ -5,15 +5,23 @@ const userSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
+      trim: true,
+      minlength: 2,
+      maxlength: 80,
     },
     fullName: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 80,
     },
     email: {
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      lowercase: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Please enter a valid email"],
     },
     password: {
       type: String,
@@ -25,46 +33,76 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
     status: {
-  type: String,
-  enum: ["pending", "approved", "rejected", "active", "blocked"],
-  default: "pending",
-},
+      type: String,
+      enum: ["pending", "approved", "rejected", "active", "blocked"],
+      default: "pending",
+    },
     city: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 80,
+    },
+    latitude: {
+      type: Number,
+      default: null,
+      min: -90,
+      max: 90,
+    },
+    longitude: {
+      type: Number,
+      default: null,
+      min: -180,
+      max: 180,
     },
     age: {
       type: Number,
       default: null,
+      min: 0,
+      max: 120,
     },
 
     specialization: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 80,
     },
     experience: {
       type: Number,
       default: null,
+      min: 0,
+      max: 70,
     },
     licenseNumber: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 60,
     },
     pmdcNumber: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 60,
     },
     bio: {
       type: String,
       default: "",
+      trim: true,
+      maxlength: 1000,
     },
     consultationFee: {
       type: Number,
       default: 0,
+      min: 0,
+      max: 100000,
     },
     profileImageUrl: {
       type: String,
       default: "",
+      trim: true,
+      maxlength: 500,
     },
     availableDays: {
       type: [String],
@@ -82,6 +120,8 @@ const userSchema = new mongoose.Schema(
     packageName: {
       type: String,
       default: "",
+      trim: true,
+      maxlength: 40,
     },
     subscriptionStart: {
       type: Date,
@@ -95,26 +135,38 @@ const userSchema = new mongoose.Schema(
     cnic: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 15,
     },
     mobileNumber: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 20,
     },
     drivingLicenseNumber: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 60,
     },
     vehicleNumber: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 30,
     },
     ambulanceType: {
       type: String,
       default: null,
+      trim: true,
+      maxlength: 60,
     },
     driverExperience: {
       type: Number,
       default: null,
+      min: 0,
+      max: 70,
     },
     hasOxygen: {
       type: Boolean,

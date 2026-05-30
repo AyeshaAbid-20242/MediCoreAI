@@ -28,7 +28,12 @@ const ForgotPassword = () => {
     setError("");
     try {
       const res = await sendForgotPasswordOtp(email);
-      setSuccess(res.data.message);
+      if (res.data.otp) {
+        setOtp(res.data.otp);
+        setSuccess(`${res.data.message} OTP: ${res.data.otp}`);
+      } else {
+        setSuccess(res.data.message);
+      }
       setStep(2);
     } catch (err) {
       setError(getApiError(err, "Failed to send OTP"));

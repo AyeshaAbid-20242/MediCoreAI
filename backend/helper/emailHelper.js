@@ -1,21 +1,44 @@
 import nodemailer from "nodemailer";
 
 const createTransporter = () => {
+  const emailUser = process.env.EMAIL_USER?.trim();
+  const emailPass = process.env.EMAIL_PASS?.replace(/\s/g, "");
+
+  if (!emailUser || !emailPass) {
+    throw new Error("Email credentials are missing in backend/.env.");
+  }
+
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: emailUser,
+      pass: emailPass,
     },
+  });
+};
+
+const getEmailFrom = () =>
+  `"MediCore" <${process.env.EMAIL_USER?.trim() || "musmanshahid003@gmail.com"}>`;
+
+const sendEmail = async ({ to, subject, html }) => {
+  const transporter = createTransporter();
+
+  return transporter.sendMail({
+    from: getEmailFrom(),
+    to,
+    subject,
+    html,
   });
 };
 
 const sendTempPassword = async (email, name, tempPassword) => {
   try {
-    const transporter = createTransporter();
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: email,
       subject: "Your Temporary Password",
       html: `
@@ -28,17 +51,19 @@ const sendTempPassword = async (email, name, tempPassword) => {
     });
 
     console.log("Temp password email sent successfully");
+    return { sent: true };
   } catch (error) {
     console.error("Email sending failed:", error.message);
+    return {
+      sent: false,
+      error: `Could not send temporary password email: ${error.message}`,
+    };
   }
 };
 
 const sendDoctorRegistrationPassword = async (email, name, tempPassword) => {
   try {
-    const transporter = createTransporter();
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: email,
       subject: "Your MediCore Doctor Login Password",
       html: `
@@ -51,17 +76,19 @@ const sendDoctorRegistrationPassword = async (email, name, tempPassword) => {
     });
 
     console.log("Doctor registration password email sent successfully");
+    return { sent: true };
   } catch (error) {
     console.error("Doctor password email sending failed:", error.message);
+    return {
+      sent: false,
+      error: `Could not send doctor password email: ${error.message}`,
+    };
   }
 };
 
 const sendOTPEmail = async (email, name, otp) => {
   try {
-    const transporter = createTransporter();
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: email,
       subject: "Password Reset OTP",
       html: `
@@ -74,9 +101,19 @@ const sendOTPEmail = async (email, name, otp) => {
     });
 
     console.log("OTP email sent successfully");
+    return { sent: true };
   } catch (error) {
     console.error("OTP email sending failed:", error.message);
+    return {
+      sent: false,
+      error: `Could not send OTP email: ${error.message}`,
+    };
   }
 };
 
-export { sendTempPassword, sendDoctorRegistrationPassword, sendOTPEmail };
+export {
+  createTransporter,
+  sendTempPassword,
+  sendDoctorRegistrationPassword,
+  sendOTPEmail,
+};

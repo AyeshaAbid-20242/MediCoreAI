@@ -1,148 +1,116 @@
-import axios from "axios";
+import api from "./axios";
 
-const BASE_URL = "http://localhost:5000/api/auth";
-
-const getToken = () => localStorage.getItem("token");
-const headers = () => ({ Authorization: `Bearer ${getToken()}` });
-
-// ==========================================
-// Stats
-// ==========================================
 export const getAdminStats = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/stats`, { headers: headers() });
+  const res = await api.get("/admin/stats");
   return res.data;
 };
 
-// ==========================================
-// Users
-// ==========================================
 export const getPendingUsers = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/pending`, { headers: headers() });
+  const res = await api.get("/admin/users/pending");
   return res.data;
 };
 
 export const approveUser = async (id) => {
-  const res = await axios.put(`${BASE_URL}/admin/approve/${id}`, {}, { headers: headers() });
+  const res = await api.patch(`/admin/users/${id}/approve`);
   return res.data;
 };
 
 export const rejectUser = async (id) => {
-  const res = await axios.put(`${BASE_URL}/admin/reject/${id}`, {}, { headers: headers() });
+  const res = await api.patch(`/admin/users/${id}/reject`);
   return res.data;
 };
 
 export const getAllUsers = async (role = "", status = "") => {
-  const res = await axios.get(`${BASE_URL}/admin/all-users?role=${role}&status=${status}`, { headers: headers() });
+  const res = await api.get("/admin/users", { params: { role, status } });
   return res.data;
 };
 
 export const deleteUser = async (id) => {
-  const res = await axios.delete(`${BASE_URL}/admin/delete/${id}`, { headers: headers() });
+  const res = await api.delete(`/admin/users/${id}`);
   return res.data;
 };
 
 export const editUser = async (id, data) => {
-  const res = await axios.put(`${BASE_URL}/admin/edit-user/${id}`, data, { headers: headers() });
+  const res = await api.put(`/admin/users/${id}`, data);
   return res.data;
 };
 
 export const blockUnblockUser = async (id) => {
-  const res = await axios.put(`${BASE_URL}/admin/block-unblock/${id}`, {}, { headers: headers() });
+  const res = await api.patch(`/admin/users/${id}/block`);
   return res.data;
 };
 
 export const resendTempPassword = async (id) => {
-  const res = await axios.post(`${BASE_URL}/admin/resend-password/${id}`, {}, { headers: headers() });
+  const res = await api.post(`/admin/users/${id}/password`);
   return res.data;
 };
 
-// ==========================================
-// Subscriptions
-// ==========================================
 export const getAllSubscriptions = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/subscriptions`, { headers: headers() });
+  const res = await api.get("/admin/subscriptions");
   return res.data;
 };
 
 export const updateSubscription = async (id, data) => {
-  const res = await axios.put(`${BASE_URL}/admin/subscriptions/${id}`, data, { headers: headers() });
+  const res = await api.patch(`/admin/subscriptions/${id}`, data);
   return res.data;
 };
 
 export const getSubscriptionPlans = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/subscription-plans`, { headers: headers() });
+  const res = await api.get("/admin/subscription-plans");
   return res.data;
 };
 
 export const updateSubscriptionPlans = async (data) => {
-  const res = await axios.put(`${BASE_URL}/admin/subscription-plans`, data, { headers: headers() });
+  const res = await api.put("/admin/subscription-plans", data);
   return res.data;
 };
 
-// ==========================================
-// Appointments
-// ==========================================
 export const getAllAppointments = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/appointments`, { headers: headers() });
+  const res = await api.get("/admin/appointments");
   return res.data;
 };
 
 export const cancelAppointment = async (id) => {
-  const res = await axios.put(`${BASE_URL}/admin/appointments/cancel/${id}`, {}, { headers: headers() });
+  const res = await api.patch(`/admin/appointments/${id}/cancel`);
   return res.data;
 };
 
-// ==========================================
-// Payments
-// ==========================================
 export const getAllPayments = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/payments`, { headers: headers() });
+  const res = await api.get("/admin/payments");
   return res.data;
 };
 
-// ==========================================
-// Analytics
-// ==========================================
 export const getRevenueStats = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/revenue-stats`, { headers: headers() });
+  const res = await api.get("/admin/analytics/revenue");
   return res.data;
 };
 
 export const getDoctorRatings = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/doctor-ratings`, { headers: headers() });
+  const res = await api.get("/admin/analytics/doctor-ratings");
   return res.data;
 };
 
-// ==========================================
-// Emails
-// ==========================================
 export const sendEmailToUser = async (id, data) => {
-  const res = await axios.post(`${BASE_URL}/admin/send-email/${id}`, data, { headers: headers() });
+  const res = await api.post(`/admin/users/${id}/emails`, data);
   return res.data;
 };
 
 export const broadcastEmail = async (data) => {
-  const res = await axios.post(`${BASE_URL}/admin/broadcast-email`, data, { headers: headers() });
+  const res = await api.post("/admin/emails/broadcast", data);
   return res.data;
 };
 
-// ==========================================
-// Settings
-// ==========================================
 export const changeAdminPassword = async (data) => {
-  const res = await axios.put(`${BASE_URL}/admin/change-password`, data, { headers: headers() });
+  const res = await api.put("/admin/settings/password", data);
   return res.data;
 };
 
-// ==========================================
-// Reviews
-// ==========================================
 export const getAllReviews = async () => {
-  const res = await axios.get(`${BASE_URL}/admin/reviews`, { headers: headers() });
+  const res = await api.get("/admin/reviews");
   return res.data;
 };
 
 export const deleteReview = async (id) => {
-  const res = await axios.delete(`${BASE_URL}/admin/reviews/${id}`, { headers: headers() });
+  const res = await api.delete(`/admin/reviews/${id}`);
   return res.data;
 };

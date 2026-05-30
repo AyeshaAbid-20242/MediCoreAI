@@ -5,7 +5,7 @@ export const requestAppointment = (payload) => {
 };
 
 export const getPatientAppointments = () => {
-  return api.get("/appointments/my");
+  return api.get("/appointments/me");
 };
 
 export const payAppointment = (appointmentId) => {
@@ -13,7 +13,7 @@ export const payAppointment = (appointmentId) => {
 };
 
 export const getDoctorAppointments = () => {
-  return api.get("/appointments/doctor");
+  return api.get("/appointments/doctor/me");
 };
 
 export const updateAppointmentStatus = (appointmentId, appointmentStatus) => {

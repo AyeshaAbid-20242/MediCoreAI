@@ -1,8 +1,13 @@
 import { motion } from "framer-motion";
 
-const AmbulanceJobs = ({ jobs, onRefresh, theme }) => {
+const AmbulanceJobs = ({ jobs, onRefresh, onUpdateStatus, theme }) => {
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
-  const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
+
+  const actions = {
+    requested: [["Accept", "accepted"], ["Cancel", "cancelled"]],
+    accepted: [["Start", "active"], ["Cancel", "cancelled"]],
+    active: [["Complete", "completed"]],
+  };
 
   return (
     <div className="space-y-5">
@@ -58,6 +63,8 @@ const AmbulanceJobs = ({ jobs, onRefresh, theme }) => {
                   <div className="mt-2 space-y-1">
                     {[
                       ["Location", job.location],
+                      ["Pickup", job.pickupLocation],
+                      ["Destination", job.destination],
                       ["Contact", job.contactNumber],
                       ["Notes", job.notes],
                     ].map(([label, value]) => value && (
@@ -71,6 +78,21 @@ const AmbulanceJobs = ({ jobs, onRefresh, theme }) => {
                   {new Date(job.createdAt).toLocaleDateString()}
                 </p>
               </div>
+              {actions[job.status]?.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {actions[job.status].map(([label, status]) => (
+                    <button
+                      key={status}
+                      onClick={() => onUpdateStatus(job._id, status)}
+                      className={`h-9 rounded-lg px-4 text-xs font-black text-white ${
+                        status === "cancelled" ? "bg-[#991B1B]" : "bg-[#C8102E]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </motion.div>
           ))}
         </div>

@@ -1,21 +1,29 @@
-import axios from "axios";
+import api from "./axios";
 
-const BASE_URL = "http://localhost:5000/api/ambulance";
-
-const getToken = () => localStorage.getItem("token");
-const headers = () => ({ Authorization: `Bearer ${getToken()}` });
-
-export const getDriverDashboard = async () => {
-  const res = await axios.get(`${BASE_URL}/dashboard`, { headers: headers() });
-  return res;
+export const getDriverDashboard = () => {
+  return api.get("/ambulance/dashboard");
 };
 
-export const updateDriverProfile = async (data) => {
-  const res = await axios.put(`${BASE_URL}/profile`, data, { headers: headers() });
-  return res;
+export const requestAmbulance = (data) => {
+  return api.post("/ambulance/requests", data);
 };
 
-export const activateDriverSubscription = async (data) => {
-  const res = await axios.post(`${BASE_URL}/subscription`, data, { headers: headers() });
-  return res;
+export const getPatientAmbulanceRequests = () => {
+  return api.get("/ambulance/requests/me");
+};
+
+export const getDriverJobs = () => {
+  return api.get("/ambulance/jobs");
+};
+
+export const updateDriverJobStatus = (jobId, data) => {
+  return api.patch(`/ambulance/jobs/${jobId}/status`, data);
+};
+
+export const updateDriverProfile = (data) => {
+  return api.put("/ambulance/me/profile", data);
+};
+
+export const activateDriverSubscription = (data) => {
+  return api.post("/ambulance/me/subscription", data);
 };

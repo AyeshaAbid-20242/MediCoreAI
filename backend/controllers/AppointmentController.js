@@ -1,5 +1,13 @@
 import Appointment from "../models/Appointment.js";
 import User from "../models/user.js";
+import {
+  isFutureDate,
+  isValidObjectId,
+  sendValidationError,
+  timeRegex,
+  trimString,
+  urlRegex,
+} from "../helper/validators.js";
 
 const activeDoctorStatus = ["approved", "active"];
 
@@ -11,11 +19,17 @@ const populateAppointment = (query) =>
 const requestAppointment = async (req, res) => {
   try {
     const { doctorId, patientNotes, appointmentDate, appointmentTime } = req.body;
+    const finalTime = trimString(appointmentTime);
+    const finalNotes = trimString(patientNotes) || "";
+    const errors = [];
 
-    if (!doctorId || !appointmentDate || !appointmentTime) {
-      return res.status(400).json({
-        message: "Doctor, appointment date and appointment time are required.",
-      });
+    if (!isValidObjectId(doctorId)) errors.push("Valid doctor is required.");
+    if (!isFutureDate(appointmentDate)) errors.push("Appointment date must be today or later.");
+    if (!timeRegex.test(finalTime || "")) errors.push("Appointment time must use HH:mm format.");
+    if (finalNotes.length > 1000) errors.push("Patient notes cannot exceed 1000 characters.");
+
+    if (errors.length) {
+      return sendValidationError(res, errors);
     }
 
     const doctor = await User.findOne({
@@ -31,13 +45,26 @@ const requestAppointment = async (req, res) => {
       });
     }
 
+    const existingSlot = await Appointment.findOne({
+      doctorId,
+      appointmentDate: new Date(appointmentDate),
+      appointmentTime: finalTime,
+      appointmentStatus: { $nin: ["rejected", "cancelled"] },
+    });
+
+    if (existingSlot) {
+      return res.status(409).json({
+        message: "This appointment slot is already booked.",
+      });
+    }
+
     const appointment = await Appointment.create({
       patientId: req.user._id,
       doctorId,
       consultationFee: doctor.consultationFee || 0,
-      patientNotes: patientNotes || "",
+      patientNotes: finalNotes,
       appointmentDate,
-      appointmentTime,
+      appointmentTime: finalTime,
     });
 
     const populatedAppointment = await populateAppointment(
@@ -55,6 +82,10 @@ const requestAppointment = async (req, res) => {
 
 const payAppointment = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) {
+      return sendValidationError(res, ["Valid appointment id is required."]);
+    }
+
     const appointment = await Appointment.findOne({
       _id: req.params.id,
       patientId: req.user._id,
@@ -115,6 +146,10 @@ const updateAppointmentStatus = async (req, res) => {
     const { appointmentStatus } = req.body;
     const allowedStatuses = ["accepted", "rejected", "completed", "cancelled"];
 
+    if (!isValidObjectId(req.params.id)) {
+      return sendValidationError(res, ["Valid appointment id is required."]);
+    }
+
     if (!allowedStatuses.includes(appointmentStatus)) {
       return res.status(400).json({ message: "Invalid appointment status." });
     }
@@ -153,6 +188,16 @@ const updateAppointmentStatus = async (req, res) => {
 const updateZoomLink = async (req, res) => {
   try {
     const { zoomLink } = req.body;
+    const finalZoomLink = trimString(zoomLink) || "";
+
+    if (!isValidObjectId(req.params.id)) {
+      return sendValidationError(res, ["Valid appointment id is required."]);
+    }
+
+    if (finalZoomLink && !urlRegex.test(finalZoomLink)) {
+      return sendValidationError(res, ["Meeting link must be a valid URL."]);
+    }
+
     const appointment = await Appointment.findOne({
       _id: req.params.id,
       doctorId: req.user._id,
@@ -162,7 +207,7 @@ const updateZoomLink = async (req, res) => {
       return res.status(404).json({ message: "Appointment not found." });
     }
 
-    appointment.zoomLink = zoomLink || "";
+    appointment.zoomLink = finalZoomLink;
     await appointment.save();
 
     const populatedAppointment = await populateAppointment(

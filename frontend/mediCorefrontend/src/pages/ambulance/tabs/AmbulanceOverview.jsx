@@ -151,7 +151,7 @@ const AmbulanceOverview = ({ driver, stats, jobs, setActiveTab, theme }) => {
                 <div key={job._id} className={`${softClass} flex items-center justify-between p-3`}>
                   <div>
                     <p className={`text-sm font-black ${theme.text}`}>{job.patientName || "Patient"}</p>
-                    <p className={`text-xs ${theme.subtext}`}>{job.location || "Location not set"}</p>
+                    <p className={`text-xs ${theme.subtext}`}>{job.pickupLocation || "Location not set"}</p>
                   </div>
                   <span className={`rounded-md px-2 py-1 text-[10px] font-black
                     ${job.status === "completed" ? "bg-[#DCFCE7] text-[#166534]" :

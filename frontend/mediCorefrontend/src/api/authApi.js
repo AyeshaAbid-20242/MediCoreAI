@@ -21,5 +21,5 @@ export const resetPassword = ({ email, otp, newPassword }) => {
 };
 
 export const getPatientProviders = () => {
-  return api.get("/auth/patient/providers");
+  return api.get("/patients/me/providers");
 };

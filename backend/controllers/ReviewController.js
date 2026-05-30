@@ -1,13 +1,26 @@
 import Appointment from "../models/Appointment.js";
 import Review from "../models/Review.js";
+import {
+  isValidObjectId,
+  sendValidationError,
+  toNumber,
+  trimString,
+} from "../helper/validators.js";
 
 const createReview = async (req, res) => {
   try {
     const { appointmentId, rating, comment } = req.body;
+    const finalRating = toNumber(rating);
+    const finalComment = trimString(comment) || "";
+    const errors = [];
 
-    if (!appointmentId || !rating) {
-      return res.status(400).json({ message: "Appointment and rating are required." });
+    if (!isValidObjectId(appointmentId)) errors.push("Valid appointment is required.");
+    if (finalRating === null || finalRating < 1 || finalRating > 5) {
+      errors.push("Rating must be between 1 and 5.");
     }
+    if (finalComment.length > 1000) errors.push("Comment cannot exceed 1000 characters.");
+
+    if (errors.length) return sendValidationError(res, errors);
 
     const appointment = await Appointment.findOne({
       _id: appointmentId,
@@ -30,8 +43,8 @@ const createReview = async (req, res) => {
       patientId: req.user._id,
       doctorId: appointment.doctorId,
       appointmentId,
-      rating: Number(rating),
-      comment: comment || "",
+      rating: finalRating,
+      comment: finalComment,
     });
 
     const populatedReview = await Review.findById(review._id)
@@ -65,6 +78,10 @@ const getDoctorReviews = async (req, res) => {
 
 const getPublicDoctorReviews = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.doctorId)) {
+      return sendValidationError(res, ["Valid doctor id is required."]);
+    }
+
     const reviews = await Review.find({ doctorId: req.params.doctorId })
       .populate("patientId", "name fullName")
       .sort({ createdAt: -1 });

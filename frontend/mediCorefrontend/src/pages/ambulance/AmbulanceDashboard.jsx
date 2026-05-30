@@ -5,7 +5,7 @@ import AmbulanceProfile from "./tabs/AmbulanceProfile";
 import AmbulanceJobs from "./tabs/AmbulanceJobs";
 import AmbulancePayments from "./tabs/AmbulancePayments";
 import AmbulanceSubscription from "./tabs/AmbulanceSubscription";
-import { getDriverDashboard } from "../../api/ambulanceApi";
+import { getDriverDashboard, updateDriverJobStatus } from "../../api/ambulanceApi";
 
 const emptyDashboard = {
   driver: null,
@@ -64,6 +64,11 @@ const AmbulanceDashboard = () => {
     setDashboard((current) => ({ ...current, driver }));
   };
 
+  const updateJobStatus = async (jobId, status) => {
+    await updateDriverJobStatus(jobId, { status });
+    await loadDashboard();
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#EEF3F6]">
@@ -106,6 +111,7 @@ const AmbulanceDashboard = () => {
       <AmbulanceJobs
         jobs={dashboard.jobs}
         onRefresh={loadDashboard}
+        onUpdateStatus={updateJobStatus}
         theme={theme}
       />
     ),

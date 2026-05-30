@@ -46,11 +46,11 @@ const AmbulanceSidebar = ({ activeTab, setActiveTab, onLogout, driver }) => (
           onClick={() => setActiveTab(key)}
           className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-bold transition-colors
             ${activeTab === key
-              ? "bg-white text-[#0A1628]"
-              : "text-[#94A3B8] hover:bg-[#15243A] hover:text-white"}`}
+              ? "bg-[#C8102E] text-white"
+              : "text-[#94A3B8] hover:bg-[#1E2D45] hover:text-white"}`}
         >
           <svg
-            className={`h-4 w-4 shrink-0 ${activeTab === key ? "text-[#C8102E]" : "text-[#94A3B8]"}`}
+            className={`h-4 w-4 shrink-0 ${activeTab === key ? "text-white" : "text-[#94A3B8]"}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />
