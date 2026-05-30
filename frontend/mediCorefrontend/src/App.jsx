@@ -7,6 +7,9 @@ import PendingApproval from "./pages/doctor/PendingApproval";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AmbulanceDashboard from "./pages/ambulance/AmbulanceDashboard";
+import PaymentSuccess from "./pages/payment/PaymentSuccess";
+import PaymentCancel from "./pages/payment/PaymentCancel";
+
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRole, requireApprovedDoctor = false }) => {
   const token = localStorage.getItem("token");
@@ -68,7 +71,8 @@ const App = () => {
             </ProtectedRoute>
           }
         />
-
+        <Route path="/payment/success" element={<PaymentSuccess />} />
+        <Route path="/payment/cancel" element={<PaymentCancel />} />
       </Routes>
     </BrowserRouter>
   );

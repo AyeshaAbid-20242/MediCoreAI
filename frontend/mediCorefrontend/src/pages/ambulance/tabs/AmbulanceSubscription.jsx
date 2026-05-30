@@ -1,36 +1,71 @@
 import { useState } from "react";
-import { activateDriverSubscription } from "../../../api/ambulanceApi";
 import { motion } from "framer-motion";
+import { createCheckoutSession } from "../../../api/paymentApi";
+
+const money = (amount) => `$${Number(amount).toLocaleString()}`;
+
+const plans = [
+  {
+    name: "Basic",
+    monthlyPrice: 5,
+    yearlyPrice: 50,
+    features: [
+      "Basic job assignments",
+      "Standard support",
+      "Profile listing",
+    ],
+  },
+  {
+    name: "Professional",
+    monthlyPrice: 10,
+    yearlyPrice: 100,
+    features: [
+      "Priority job assignments",
+      "24/7 support",
+      "Featured listing",
+      "Analytics dashboard",
+    ],
+  },
+  {
+    name: "Premium",
+    monthlyPrice: 20,
+    yearlyPrice: 200,
+    features: [
+      "Unlimited job assignments",
+      "Dedicated support",
+      "Top listing priority",
+      "Advanced analytics",
+      "Custom profile badge",
+    ],
+  },
+];
 
 const AmbulanceSubscription = ({ driver, onUpdated, theme }) => {
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
   const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
-  const inputClass = `h-11 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none focus:border-[#C8102E]`;
 
-  const [form, setForm] = useState({ packageName: "Professional", months: 1 });
+  const [selectedPlan, setSelectedPlan] = useState("Professional");
+  const [duration, setDuration] = useState("monthly");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const isActive = driver?.subscriptionStatus === "active";
 
-  const plans = [
-    { name: "Basic", price: "Rs. 499/month", features: ["Basic job assignments", "Standard support", "Profile listing"] },
-    { name: "Professional", price: "Rs. 999/month", features: ["Priority job assignments", "24/7 support", "Featured listing", "Analytics dashboard"] },
-    { name: "Premium", price: "Rs. 1,999/month", features: ["Unlimited job assignments", "Dedicated support", "Top listing priority", "Advanced analytics", "Custom profile badge"] },
-  ];
+  const getPrice = (plan) => {
+    return duration === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+  };
 
-  const handleActivate = async () => {
+  const handleCheckout = async () => {
     setLoading(true);
     setError("");
-    setMessage("");
     try {
-      const res = await activateDriverSubscription(form);
-      onUpdated(res.data.driver);
-      setMessage("Subscription activated successfully!");
+      const res = await createCheckoutSession({
+        packageName: selectedPlan,
+        duration,
+      });
+      window.location.href = res.url;
     } catch (err) {
-      setError(err.response?.data?.message || "Activation failed");
-    } finally {
+      setError(err.response?.data?.message || "Failed to initiate payment");
       setLoading(false);
     }
   };
@@ -68,6 +103,27 @@ const AmbulanceSubscription = ({ driver, onUpdated, theme }) => {
         </div>
       </div>
 
+      {/* Duration Toggle */}
+      <div className="flex items-center gap-4">
+        <div className={`inline-flex rounded-lg border ${theme.border} ${theme.panel} p-1`}>
+          {["monthly", "yearly"].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDuration(d)}
+              className={`rounded-lg px-5 py-2 text-sm font-black transition-colors
+                ${duration === d ? "bg-[#C8102E] text-white" : `${theme.subtext}`}`}
+            >
+              {d.charAt(0).toUpperCase() + d.slice(1)}
+            </button>
+          ))}
+        </div>
+        {duration === "yearly" && (
+          <span className="rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-black text-[#166534]">
+            Save up to 17%
+          </span>
+        )}
+      </div>
+
       {/* Plans */}
       <div className="grid gap-4 md:grid-cols-3">
         {plans.map((plan, i) => (
@@ -76,21 +132,24 @@ const AmbulanceSubscription = ({ driver, onUpdated, theme }) => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            onClick={() => setForm({ ...form, packageName: plan.name })}
+            onClick={() => setSelectedPlan(plan.name)}
             className={`${cardClass} p-5 cursor-pointer transition-all
-              ${form.packageName === plan.name
-                ? "ring-2 ring-[#C8102E]"
-                : ""}`}
+              ${selectedPlan === plan.name ? "ring-2 ring-[#C8102E]" : ""}`}
           >
             <div className="flex items-center justify-between mb-3">
               <p className={`font-black ${theme.text}`}>{plan.name}</p>
-              {form.packageName === plan.name && (
+              {selectedPlan === plan.name && (
                 <span className="rounded-full bg-[#C8102E] px-2 py-0.5 text-[10px] font-black text-white">
                   SELECTED
                 </span>
               )}
             </div>
-            <p className="text-lg font-black text-[#C8102E] mb-3">{plan.price}</p>
+            <p className="text-2xl font-black text-[#C8102E]">
+              {money(getPrice(plan))}
+            </p>
+            <p className={`text-xs font-semibold ${theme.subtext} mb-4`}>
+              per {duration === "yearly" ? "year" : "month"}
+            </p>
             <div className="space-y-1.5">
               {plan.features.map((f) => (
                 <div key={f} className="flex items-center gap-2">
@@ -103,53 +162,42 @@ const AmbulanceSubscription = ({ driver, onUpdated, theme }) => {
         ))}
       </div>
 
-      {/* Activate Form */}
+      {/* Checkout */}
       <div className={`${cardClass} p-5 max-w-sm`}>
-        <h3 className={`font-black ${theme.text} mb-4`}>Activate Plan</h3>
+        <h3 className={`font-black ${theme.text} mb-1`}>Complete Payment</h3>
+        <p className={`text-xs font-medium ${theme.subtext} mb-4`}>
+          You will be redirected to Stripe for secure payment
+        </p>
 
-        {message && (
-          <div className="mb-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm font-bold text-[#166534]">
-            {message}
+        <div className={`${softClass} p-3 mb-4`}>
+          <div className="flex items-center justify-between">
+            <p className={`text-sm font-black ${theme.text}`}>{selectedPlan} Plan</p>
+            <p className="text-sm font-black text-[#C8102E]">
+              {money(getPrice(plans.find(p => p.name === selectedPlan)))}
+            </p>
           </div>
-        )}
+          <p className={`text-xs font-semibold ${theme.subtext} mt-0.5`}>
+            {duration === "yearly" ? "Billed yearly" : "Billed monthly"}
+          </p>
+        </div>
+
         {error && (
           <div className="mb-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm font-bold text-[#991B1B]">
             {error}
           </div>
         )}
 
-        <div className="space-y-3">
-          <div>
-            <label className={`mb-1 block text-sm font-black ${theme.subtext}`}>Selected Package</label>
-            <select
-              value={form.packageName}
-              onChange={(e) => setForm({ ...form, packageName: e.target.value })}
-              className={inputClass}
-            >
-              <option value="Basic">Basic</option>
-              <option value="Professional">Professional</option>
-              <option value="Premium">Premium</option>
-            </select>
-          </div>
-          <div>
-            <label className={`mb-1 block text-sm font-black ${theme.subtext}`}>Duration (months)</label>
-            <input
-              type="number"
-              min="1"
-              max="12"
-              value={form.months}
-              onChange={(e) => setForm({ ...form, months: Number(e.target.value) })}
-              className={inputClass}
-            />
-          </div>
-          <button
-            onClick={handleActivate}
-            disabled={loading}
-            className="h-11 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white transition hover:bg-[#a50d25] disabled:opacity-60"
-          >
-            {loading ? "Activating..." : "Activate Subscription"}
-          </button>
-        </div>
+        <button
+          onClick={handleCheckout}
+          disabled={loading}
+          className="h-11 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white transition hover:bg-[#a50d25] disabled:opacity-60"
+        >
+          {loading ? "Redirecting to payment..." : `Pay ${money(getPrice(plans.find(p => p.name === selectedPlan)))}`}
+        </button>
+
+        <p className={`mt-3 text-center text-xs font-semibold ${theme.subtext}`}>
+          Secured by Stripe — Cancel anytime
+        </p>
       </div>
     </div>
   );

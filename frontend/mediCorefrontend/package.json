@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.4.0",
-    "@stripe/stripe-js": "^9.6.0",
+    "@stripe/stripe-js": "^9.7.0",
     "axios": "^1.16.0",
     "framer-motion": "^12.40.0",
     "react": "^19.2.6",

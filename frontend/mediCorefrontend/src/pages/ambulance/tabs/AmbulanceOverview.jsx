@@ -19,35 +19,33 @@ const AmbulanceOverview = ({ driver, stats, jobs, setActiveTab, theme }) => {
 
       {/* Hero */}
       <section className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`${cardClass} overflow-hidden bg-[#0A1628] text-white`}
-        >
-          <div className="p-6">
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#94A3B8]">
-              Live operations hub
-            </p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              Emergency response command center
-            </h2>
-            <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-[#CBD5E1]">
-              Monitor your active assignments, track performance metrics, manage your profile and subscription from one unified driver console.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {[
-                ["Account Status", driver?.status || "pending"],
-                ["Vehicle", driver?.vehicleNumber || "Not set"],
-                ["Subscription", driver?.subscriptionStatus || "none"],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-[#1E2D45] bg-white/5 p-3">
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#94A3B8]">{label}</p>
-                  <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
+       <motion.div
+  initial={{ opacity: 0, y: 12 }}
+  animate={{ opacity: 1, y: 0 }}
+  className={`${cardClass} overflow-hidden p-6`}
+>
+  <p className={`text-[11px] font-black uppercase tracking-[0.22em] ${theme.subtext}`}>
+    Live operations hub
+  </p>
+  <h2 className={`mt-3 text-3xl font-black tracking-tight ${theme.text} sm:text-4xl`}>
+    Emergency response command center
+  </h2>
+  <p className={`mt-3 max-w-xl text-sm font-medium leading-6 ${theme.subtext}`}>
+    Monitor your active assignments, track performance metrics, manage your profile and subscription from one unified driver console.
+  </p>
+  <div className="mt-6 grid gap-3 sm:grid-cols-3">
+    {[
+      ["Account Status", driver?.status || "pending"],
+      ["Vehicle", driver?.vehicleNumber || "Not set"],
+      ["Subscription", driver?.subscriptionStatus || "none"],
+    ].map(([label, value]) => (
+      <div key={label} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+        <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${theme.subtext}`}>{label}</p>
+        <p className={`mt-1 truncate text-sm font-black ${theme.text}`}>{value}</p>
+      </div>
+    ))}
+  </div>
+</motion.div>
 
         {/* Status Card */}
         <motion.div

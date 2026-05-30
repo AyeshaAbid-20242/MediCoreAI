@@ -149,41 +149,41 @@ const Overview = ({ stats, setActiveTab, allUsers, appointments, payments, theme
       {/* Hero Section */}
       <section className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`${cardClass} overflow-hidden bg-[#0A1628] text-white`}
-        >
-          <div className="grid min-h-[280px] gap-4 p-5 lg:grid-cols-[1fr_320px]">
-            <div className="flex flex-col justify-between">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#94A3B8]">
-                  Live Operations Center
-                </p>
-                <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight text-white sm:text-4xl">
-                  Healthcare command & control dashboard
-                </h2>
-                <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-[#CBD5E1]">
-                  Monitor all system activity, manage users, track appointments, and oversee platform health from one unified admin console.
-                </p>
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                {[
-                  ["Platform Status", "Operational"],
-                  ["Total Users", stats.totalUsers || 0],
-                  ["Pending", stats.pendingApprovals || 0],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg border border-[#1E2D45] bg-white/5 p-3">
-                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#94A3B8]">{label}</p>
-                    <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-lg border border-[#1E2D45] bg-[#071224]">
-              <OperationsSignal darkMode={theme.darkMode} />
-            </div>
+  initial={{ opacity: 0, y: 12 }}
+  animate={{ opacity: 1, y: 0 }}
+  className={`${cardClass} overflow-hidden`}
+>
+  <div className="grid min-h-[280px] gap-4 p-5 lg:grid-cols-[1fr_320px]">
+    <div className="flex flex-col justify-between">
+      <div>
+        <p className={`text-[11px] font-black uppercase tracking-[0.22em] ${theme.subtext}`}>
+          Live Operations Center
+        </p>
+        <h2 className={`mt-3 max-w-2xl text-3xl font-black tracking-tight ${theme.text} sm:text-4xl`}>
+          Healthcare command & control dashboard
+        </h2>
+        <p className={`mt-3 max-w-xl text-sm font-medium leading-6 ${theme.subtext}`}>
+          Monitor all system activity, manage users, track appointments, and oversee platform health from one unified admin console.
+        </p>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {[
+          ["Platform Status", "Operational"],
+          ["Total Users", stats.totalUsers || 0],
+          ["Pending", stats.pendingApprovals || 0],
+        ].map(([label, value]) => (
+          <div key={label} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+            <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${theme.subtext}`}>{label}</p>
+            <p className={`mt-1 truncate text-sm font-black ${theme.text}`}>{value}</p>
           </div>
-        </motion.div>
+        ))}
+      </div>
+    </div>
+    <div className={`rounded-lg border ${theme.border} ${theme.panelMuted}`}>
+      <OperationsSignal darkMode={theme.darkMode} />
+    </div>
+  </div>
+</motion.div>
 
         {/* Pending Alert */}
         <motion.div

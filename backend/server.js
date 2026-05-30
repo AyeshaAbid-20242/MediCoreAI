@@ -4,6 +4,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import paymentRoutes from "./routes/paymentRoutes.js";
 import connectDB from "./Data/MongoDb.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
 import doctorRoutes from "./routes/doctorRoutes.js";
@@ -19,7 +20,11 @@ dotenv.config({
   quiet: true,
 });
 
+
+
 const app = express();
+
+app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 
 app.use(cors());
 app.use(express.json());
@@ -35,6 +40,7 @@ app.use("/api/doctors", doctorRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/ambulance", ambulanceRoutes);
+app.use("/api/payments", paymentRoutes);
 app.get("/", (req, res) => {
   res.send("API is running...");
 });
