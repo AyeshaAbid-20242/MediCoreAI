@@ -1,4 +1,5 @@
 import User from "../models/user.js";
+import { getAllowedAIModels, getSafeAIModel } from "../config/aiModels.js";
 import getOpenRouter from "../config/openRouter.js";
 import { sendValidationError, toNumber, trimString } from "../helper/validators.js";
 import { fetchNearbyCareFromOsm, getDistanceMeters } from "../services/nearbyCareService.js";
@@ -50,9 +51,17 @@ const getPlatformProviders = async (req, res) => {
   }
 };
 
+const getAIModels = (req, res) => {
+  res.status(200).json({
+    message: "AI models fetched successfully",
+    models: getAllowedAIModels(),
+  });
+};
+
 const analyzeSymptoms = async (req, res) => {
   try {
     const message = trimString(req.body.message);
+    const requestedModel = trimString(req.body.model);
 
     if (!message || message.length < 3) {
       return sendValidationError(res, ["Please describe your symptoms."]);
@@ -66,7 +75,7 @@ const analyzeSymptoms = async (req, res) => {
       });
     }
 
-    const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+    const model = getSafeAIModel(requestedModel);
     const prompt = `
 You are a cautious healthcare triage assistant for MediCore.
 User symptoms: ${message}
@@ -160,4 +169,4 @@ const getNearbyCare = async (req, res) => {
   }
 };
 
-export { analyzeSymptoms, getNearbyCare, getPlatformProviders };
+export { analyzeSymptoms, getAIModels, getNearbyCare, getPlatformProviders };

@@ -22,7 +22,7 @@ import { payAppointment, requestAppointment } from "../../api/appointmentApi";
 import { requestAmbulance } from "../../api/ambulanceApi";
 import { getPatientProviders } from "../../api/authApi";
 import { getApiError } from "../../api/axios";
-import { analyzeSymptoms, getNearbyCare } from "../../api/patientApi";
+import { analyzeSymptoms, getAiModels, getNearbyCare } from "../../api/patientApi";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -99,6 +99,14 @@ const demoDrivers = [
   { _id: "a1", name: "Kamran Ali", vehicleNumber: "AMB-221", ambulanceType: "Basic Life Support", status: "active", distance: 1.8, eta: "5 min", mobileNumber: "0300-1234567" },
   { _id: "a2", name: "Shahid Raza", vehicleNumber: "AMB-185", ambulanceType: "Cardiac Ambulance", status: "approved", distance: 6.3, eta: "11 min", mobileNumber: "0301-7654321" },
   { _id: "a3", name: "Tariq Mehmood", vehicleNumber: "AMB-309", ambulanceType: "Oxygen Support", status: "active", distance: 13.2, eta: "18 min", mobileNumber: "0302-9988776" },
+];
+
+const fallbackAiModels = [
+  {
+    id: "google/gemini-2.5-flash",
+    name: "Gemini 2.5 Flash",
+    description: "Fast balanced responses for symptom guidance.",
+  },
 ];
 
 const defaultLocation = { lat: 32.1877, lng: 74.1945 };
@@ -292,6 +300,8 @@ const PatientDashboard = () => {
     { sender: "ai", text: "Describe symptoms or ask about prescriptions. I will help you prepare for care." },
   ]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiModels, setAiModels] = useState(fallbackAiModels);
+  const [selectedAiModel, setSelectedAiModel] = useState(fallbackAiModels[0].id);
   const [isListening, setIsListening] = useState(false);
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [providers, setProviders] = useState({ doctors: demoDoctors, ambulanceDrivers: demoDrivers });
@@ -370,6 +380,23 @@ const PatientDashboard = () => {
     );
   }, []);
 
+  useEffect(() => {
+    const loadAiModels = async () => {
+      try {
+        const response = await getAiModels();
+        const models = response.data.models || [];
+        if (!models.length) return;
+
+        setAiModels(models);
+        setSelectedAiModel(models[0].id);
+      } catch {
+        setAiModels(fallbackAiModels);
+      }
+    };
+
+    loadAiModels();
+  }, []);
+
   const doctorSpecs = useMemo(() => {
     const specs = providers.doctors.map((doctor) => doctor.specialization || "General Medicine");
     return ["All", ...new Set(specs)];
@@ -410,8 +437,13 @@ const PatientDashboard = () => {
     setAiLoading(true);
 
     try {
-      const response = await analyzeSymptoms(text);
-      setChatMessages((messages) => [...messages, { sender: "ai", text: response.data.answer }]);
+      const response = await analyzeSymptoms({ message: text, model: selectedAiModel });
+      const modelName =
+        aiModels.find((model) => model.id === response.data.model)?.name || response.data.model;
+      setChatMessages((messages) => [
+        ...messages,
+        { sender: "ai", text: response.data.answer, model: modelName },
+      ]);
     } catch (error) {
       setChatMessages((messages) => [
         ...messages,
@@ -707,6 +739,23 @@ const PatientDashboard = () => {
             {activeNav === "AI Chat" && (
               <section className={`${cardClass} p-4`}>
                 <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
+                <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                  <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>AI Model</label>
+                  <select
+                    value={selectedAiModel}
+                    onChange={(event) => setSelectedAiModel(event.target.value)}
+                    className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-sm font-bold ${theme.text} outline-none`}
+                  >
+                    {aiModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className={`mt-1 text-xs ${theme.subtext}`}>
+                    {aiModels.find((model) => model.id === selectedAiModel)?.description}
+                  </p>
+                </div>
                 <div className={`mt-3 h-[360px] space-y-2 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
                   {chatMessages.map((message, index) => (
                     <div
@@ -717,6 +766,11 @@ const PatientDashboard = () => {
                           : `${theme.panel} ${theme.text} border ${theme.border}`
                       }`}
                     >
+                      {message.model && (
+                        <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] opacity-70">
+                          {message.model}
+                        </p>
+                      )}
                       {message.text}
                     </div>
                   ))}
@@ -980,6 +1034,19 @@ const PatientDashboard = () => {
                 <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
                   <section className={`${cardClass} p-4`}>
                     <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
+                    <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
+                      <select
+                        value={selectedAiModel}
+                        onChange={(event) => setSelectedAiModel(event.target.value)}
+                        className={`h-9 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs font-bold ${theme.text} outline-none`}
+                      >
+                        {aiModels.map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className={`mt-3 h-[210px] space-y-2 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
                       {chatMessages.map((message, index) => (
                         <div
@@ -990,6 +1057,11 @@ const PatientDashboard = () => {
                               : `${theme.panel} ${theme.text} border ${theme.border}`
                           }`}
                         >
+                          {message.model && (
+                            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] opacity-70">
+                              {message.model}
+                            </p>
+                          )}
                           {message.text}
                         </div>
                       ))}

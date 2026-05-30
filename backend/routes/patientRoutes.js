@@ -1,6 +1,7 @@
 import express from "express";
 import {
   analyzeSymptoms,
+  getAIModels,
   getNearbyCare,
   getPlatformProviders,
 } from "../controllers/PatientController.js";
@@ -13,6 +14,7 @@ router.use(protect, authorizeRoles("patient"));
 
 router.get("/me/providers", getPlatformProviders);
 router.get("/me/nearby-care", getNearbyCare);
+router.get("/me/ai-models", getAIModels);
 router.post(
   "/me/symptom-check",
   createRateLimiter({
