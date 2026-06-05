@@ -13,9 +13,14 @@ const Patients = ({ allUsers, theme }) => {
 
       {patients.length === 0 ? (
         <div className={`${cardClass} p-16 text-center`}>
-          <p className="text-5xl mb-4">🏥</p>
-          <p className={`font-black text-lg ${theme.text}`}>No patients registered yet</p>
-        </div>
+  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${theme.border} ${theme.panelMuted}`}>
+    <svg className={`h-8 w-8 ${theme.subtext}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  </div>
+  <p className={`font-black text-lg ${theme.text}`}>No patients registered yet</p>
+  <p className={`text-sm font-medium ${theme.subtext} mt-1`}>Patients will appear here once registered</p>
+</div>
       ) : (
         <div className={`${cardClass} overflow-hidden`}>
           <div className="overflow-x-auto">

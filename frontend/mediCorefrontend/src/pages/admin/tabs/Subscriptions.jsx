@@ -56,9 +56,14 @@ const Subscriptions = ({ subscriptions, onUpdate, theme }) => {
       <div className={`${cardClass} overflow-hidden`}>
         {subscriptions.length === 0 ? (
           <div className="p-16 text-center">
-            <p className="text-5xl mb-4">💳</p>
-            <p className={`font-black text-lg ${theme.text}`}>No subscriptions yet</p>
-          </div>
+  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${theme.border} ${theme.panelMuted}`}>
+    <svg className={`h-8 w-8 ${theme.subtext}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  </div>
+  <p className={`font-black text-lg ${theme.text}`}>No subscriptions yet</p>
+  <p className={`text-sm font-medium mt-1 ${theme.subtext}`}>Subscriptions will appear here once activated</p>
+</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

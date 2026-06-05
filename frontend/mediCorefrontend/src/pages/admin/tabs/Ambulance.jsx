@@ -13,9 +13,14 @@ const Ambulance = ({ allUsers, theme }) => {
 
       {drivers.length === 0 ? (
         <div className={`${cardClass} p-16 text-center`}>
-          <p className="text-5xl mb-4">🚑</p>
-          <p className={`font-black text-lg ${theme.text}`}>No drivers registered yet</p>
-        </div>
+  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${theme.border} ${theme.panelMuted}`}>
+    <svg className={`h-8 w-8 ${theme.subtext}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+    </svg>
+  </div>
+  <p className={`font-black text-lg ${theme.text}`}>No drivers registered yet</p>
+  <p className={`text-sm font-medium ${theme.subtext} mt-1`}>Drivers will appear here once registered</p>
+</div>
       ) : (
         <div className={`${cardClass} overflow-hidden`}>
           <div className="overflow-x-auto">

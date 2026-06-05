@@ -110,10 +110,15 @@ const Messages = ({ allUsers, onSendEmail, onBroadcast, theme }) => {
               <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Write your broadcast message..." rows={5} className={`${inputClass} h-auto resize-none py-3`} />
             </div>
             <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
-              <p className="text-xs font-black text-yellow-500">
-                ⚠️ This will send an email to all {broadcastRole === "all" ? "users" : broadcastRole + "s"} in the system.
-              </p>
-            </div>
+  <div className="flex items-start gap-2">
+    <svg className="h-4 w-4 shrink-0 text-yellow-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+    <p className="text-xs font-black text-yellow-500">
+      This will send an email to all {broadcastRole === "all" ? "users" : broadcastRole + "s"} in the system.
+    </p>
+  </div>
+</div>
             <button
               onClick={handleSendBroadcast}
               disabled={loading || !subject || !message}

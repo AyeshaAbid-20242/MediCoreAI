@@ -43,9 +43,14 @@ const Appointments = ({ appointments, onCancel, theme }) => {
       <div className={`${cardClass} overflow-hidden`}>
         {filtered.length === 0 ? (
           <div className="p-16 text-center">
-            <p className="text-5xl mb-4">📅</p>
-            <p className={`font-black text-lg ${theme.text}`}>No appointments found</p>
-          </div>
+  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${theme.border} ${theme.panelMuted}`}>
+    <svg className={`h-8 w-8 ${theme.subtext}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  </div>
+  <p className={`font-black text-lg ${theme.text}`}>No appointments found</p>
+  <p className={`text-sm font-medium ${theme.subtext} mt-1`}>Try changing the filters</p>
+</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

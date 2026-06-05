@@ -13,6 +13,7 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState("");
   const [links, setLinks] = useState({});
+  const [zoomSuccess, setZoomSuccess] = useState({});
 
   const handleStatus = async (appointmentId, appointmentStatus) => {
     setSavingId(appointmentId);
@@ -32,6 +33,8 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
     setError("");
     try {
       await updateAppointmentZoomLink(appointmentId, links[appointmentId] || "");
+      setZoomSuccess((prev) => ({ ...prev, [appointmentId]: true }));
+      setTimeout(() => setZoomSuccess((prev) => ({ ...prev, [appointmentId]: false })), 3000);
       await onRefresh();
     } catch (err) {
       setError(getApiError(err, "Could not update meeting link"));
@@ -49,13 +52,25 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
 
   return (
     <div className="space-y-5">
-      {error && <div className="rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm font-bold text-[#991B1B]">{error}</div>}
+      {error && (
+        <div className="rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm font-bold text-[#991B1B]">
+          {error}
+        </div>
+      )}
+
       {groups.map(([key, title]) => (
-        <section key={key} className={`rounded-lg border ${theme.border} ${theme.panel} p-4 shadow-[0_14px_34px_rgba(10,22,40,0.06)]`}>
+        <section
+          key={key}
+          className={`rounded-lg border ${theme.border} ${theme.panel} p-4 shadow-[0_14px_34px_rgba(10,22,40,0.06)]`}
+        >
           <h2 className={`text-base font-black ${theme.text}`}>{title}</h2>
           <div className="mt-3 grid gap-3 xl:grid-cols-2">
             {getGroupItems(key).map((appointment) => (
-              <article key={appointment._id} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+              <article
+                key={appointment._id}
+                className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}
+              >
+                {/* Header */}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className={`text-sm font-black ${theme.text}`}>
@@ -69,38 +84,98 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
                     {appointment.paymentStatus}
                   </span>
                 </div>
-                <p className={`mt-2 text-sm ${theme.subtext}`}>{appointment.patientNotes || "No notes provided."}</p>
+
+                {/* Notes */}
+                <p className={`mt-2 text-sm ${theme.subtext}`}>
+                  {appointment.patientNotes || "No notes provided."}
+                </p>
+
+                {/* Status Actions */}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {appointment.appointmentStatus === "requested" && (
                     <>
-                      <button disabled={savingId === appointment._id} onClick={() => handleStatus(appointment._id, "accepted")} className="h-8 rounded-lg bg-[#059669] px-3 text-xs font-black text-white">
+                      <button
+                        disabled={savingId === appointment._id}
+                        onClick={() => handleStatus(appointment._id, "accepted")}
+                        className="h-8 rounded-lg bg-[#059669] px-3 text-xs font-black text-white transition hover:bg-[#047857] disabled:opacity-60"
+                      >
                         Accept
                       </button>
-                      <button disabled={savingId === appointment._id} onClick={() => handleStatus(appointment._id, "rejected")} className="h-8 rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white">
+                      <button
+                        disabled={savingId === appointment._id}
+                        onClick={() => handleStatus(appointment._id, "rejected")}
+                        className="h-8 rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white transition hover:bg-[#a50d25] disabled:opacity-60"
+                      >
                         Reject
                       </button>
                     </>
                   )}
                   {appointment.appointmentStatus === "accepted" && (
-                    <button disabled={savingId === appointment._id} onClick={() => handleStatus(appointment._id, "completed")} className="h-8 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white">
+                    <button
+                      disabled={savingId === appointment._id}
+                      onClick={() => handleStatus(appointment._id, "completed")}
+                      className={`h-8 rounded-lg border ${theme.border} px-3 text-xs font-black ${theme.subtext} transition hover:border-[#059669] hover:text-[#059669] disabled:opacity-60`}
+                    >
                       Mark Completed
                     </button>
                   )}
                 </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <input
-                    value={links[appointment._id] ?? appointment.zoomLink ?? ""}
-                    onChange={(event) => setLinks({ ...links, [appointment._id]: event.target.value })}
-                    placeholder="Paste Zoom / Google Meet link"
-                    className={`h-9 min-w-0 flex-1 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#C8102E]`}
-                  />
-                  <button disabled={savingId === appointment._id} onClick={() => handleZoom(appointment._id)} className="h-9 rounded-lg bg-[#0891B2] px-3 text-xs font-black text-white">
-                    Save Link
-                  </button>
+
+                {/* Zoom Link Section */}
+                <div className={`mt-3 rounded-lg border ${theme.border} p-3 space-y-2`}>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-[11px] font-black uppercase tracking-wider ${theme.subtext}`}>
+                      Meeting Link
+                    </p>
+                    {appointment.zoomLink && (
+                      <a      
+                        href={appointment.zoomLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-black text-[#0891B2] hover:underline"
+                      >
+                        Open Link
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Success message */}
+                  {zoomSuccess[appointment._id] && (
+                    <div className="rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-xs font-black text-[#166534]">
+                      Meeting link saved and email sent to patient
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      value={links[appointment._id] ?? appointment.zoomLink ?? ""}
+                      onChange={(e) => setLinks({ ...links, [appointment._id]: e.target.value })}
+                      placeholder="Paste Zoom / Google Meet / Teams link"
+                      className={`h-9 min-w-0 flex-1 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2]`}
+                    />
+                    <button
+                      disabled={savingId === appointment._id}
+                      onClick={() => handleZoom(appointment._id)}
+                      className="h-9 rounded-lg bg-[#0891B2] px-4 text-xs font-black text-white transition hover:bg-[#0770a0] disabled:opacity-60"
+                    >
+                      {savingId === appointment._id ? "Saving..." : "Send Link"}
+                    </button>
+                  </div>
+
+                  {/* Existing link preview */}
+                  {appointment.zoomLink && (
+                    <p className={`truncate text-xs font-medium ${theme.subtext}`}>
+                      {appointment.zoomLink}
+                    </p>
+                  )}
                 </div>
               </article>
             ))}
-            {!getGroupItems(key).length && <p className={`text-sm font-semibold ${theme.subtext}`}>No appointments in this section.</p>}
+            {!getGroupItems(key).length && (
+              <p className={`text-sm font-semibold ${theme.subtext}`}>
+                No appointments in this section.
+              </p>
+            )}
           </div>
         </section>
       ))}
