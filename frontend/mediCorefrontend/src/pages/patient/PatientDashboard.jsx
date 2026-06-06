@@ -23,6 +23,7 @@ import { requestAmbulance } from "../../api/ambulanceApi";
 import { getPatientProviders } from "../../api/authApi";
 import { getApiError } from "../../api/axios";
 import { analyzeSymptoms, getAiModels, getNearbyCare } from "../../api/patientApi";
+import { createAppointmentCheckout } from "../../api/paymentApi";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -509,22 +510,18 @@ const PatientDashboard = () => {
     }
   };
 
-  const handleAppointmentPayment = async () => {
-    if (!pendingAppointment?._id) return;
-
-    setBookingLoading(true);
-    setBookingError("");
-
-    try {
-      await payAppointment(pendingAppointment._id);
-      setBookingMessage("Payment marked as paid. The doctor can now accept your request.");
-      setPendingAppointment(null);
-    } catch (error) {
-      setBookingError(getApiError(error, "Could not complete payment"));
-    } finally {
-      setBookingLoading(false);
-    }
-  };
+ const handleAppointmentPayment = async () => {
+  if (!pendingAppointment?._id) return;
+  setBookingLoading(true);
+  setBookingError("");
+  try {
+    const res = await createAppointmentCheckout(pendingAppointment._id);
+    window.location.href = res.url;
+  } catch (error) {
+    setBookingError(getApiError(error, "Could not initiate payment"));
+    setBookingLoading(false);
+  }
+};
 
   const openAmbulanceRequest = (driver) => {
     setAmbulanceRequest(driver);
@@ -1435,9 +1432,14 @@ const BookingModal = ({
           <button type="submit" disabled={loading || Boolean(pendingAppointment)} className="h-10 rounded-lg bg-[#0A1628] px-4 text-sm font-black text-white disabled:opacity-50">
             {loading ? "Working..." : "Request"}
           </button>
-          <button type="button" onClick={onPay} disabled={loading || !pendingAppointment} className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50">
-            Pay placeholder
-          </button>
+          <button
+  type="button"
+  onClick={onPay}
+  disabled={loading || !pendingAppointment}
+  className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50"
+>
+  {loading ? "Redirecting..." : `Pay with Stripe`}
+</button>
         </div>
       </form>
     </section>

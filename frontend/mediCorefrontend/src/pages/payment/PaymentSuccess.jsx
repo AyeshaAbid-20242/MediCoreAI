@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { verifyPayment } from "../../api/paymentApi";
+import { verifyPayment, verifyAppointmentPayment } from "../../api/paymentApi";
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
@@ -11,29 +11,35 @@ const PaymentSuccess = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-    if (!sessionId) {
-      setStatus("error");
-      setMessage("Invalid payment session");
-      return;
-    }
-    verifyPayment(sessionId)
-      .then((data) => {
-        setStatus("success");
-        setMessage(data.message);
-        // Update local storage
+  const sessionId = searchParams.get("session_id");
+  const type = searchParams.get("type");
+
+  if (!sessionId) {
+    setStatus("error");
+    setMessage("Invalid payment session");
+    return;
+  }
+
+  const verify = type === "appointment" ? verifyAppointmentPayment : verifyPayment;
+
+  verify(sessionId)
+    .then((data) => {
+      setStatus("success");
+      setMessage(data.message);
+      if (type !== "appointment") {
         const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
         localStorage.setItem("user", JSON.stringify({
           ...savedUser,
-          subscriptionStatus: data.subscription.status,
-          packageName: data.subscription.packageName,
+          subscriptionStatus: data.subscription?.status,
+          packageName: data.subscription?.packageName,
         }));
-      })
-      .catch((err) => {
-        setStatus("error");
-        setMessage(err.response?.data?.message || "Payment verification failed");
-      });
-  }, []);
+      }
+    })
+    .catch((err) => {
+      setStatus("error");
+      setMessage(err.response?.data?.message || "Payment verification failed");
+    });
+}, []);
 
   const handleContinue = () => {
     if (user.role === "doctor") navigate("/doctor/dashboard");

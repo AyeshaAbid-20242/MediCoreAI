@@ -8,6 +8,7 @@ import {
   trimString,
   urlRegex,
 } from "../helper/validators.js";
+import { sendZoomLinkEmail } from "../helper/emailHelper.js";
 
 const activeDoctorStatus = ["approved", "active"];
 
@@ -28,9 +29,7 @@ const requestAppointment = async (req, res) => {
     if (!timeRegex.test(finalTime || "")) errors.push("Appointment time must use HH:mm format.");
     if (finalNotes.length > 1000) errors.push("Patient notes cannot exceed 1000 characters.");
 
-    if (errors.length) {
-      return sendValidationError(res, errors);
-    }
+    if (errors.length) return sendValidationError(res, errors);
 
     const doctor = await User.findOne({
       _id: doctorId,
@@ -53,9 +52,7 @@ const requestAppointment = async (req, res) => {
     });
 
     if (existingSlot) {
-      return res.status(409).json({
-        message: "This appointment slot is already booked.",
-      });
+      return res.status(409).json({ message: "This appointment slot is already booked." });
     }
 
     const appointment = await Appointment.create({
@@ -214,8 +211,21 @@ const updateZoomLink = async (req, res) => {
       Appointment.findById(appointment._id)
     );
 
+    if (finalZoomLink) {
+      const patient = populatedAppointment.patientId;
+      const doctor = populatedAppointment.doctorId;
+      await sendZoomLinkEmail(
+        patient.email,
+        patient.fullName || patient.name,
+        doctor.fullName || doctor.name,
+        new Date(appointment.appointmentDate).toLocaleDateString(),
+        appointment.appointmentTime,
+        finalZoomLink
+      );
+    }
+
     res.status(200).json({
-      message: "Meeting link updated successfully",
+      message: "Meeting link updated and email sent to patient",
       appointment: populatedAppointment,
     });
   } catch (error) {
