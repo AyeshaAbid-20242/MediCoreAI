@@ -1,5 +1,11 @@
 import express from "express";
-import { createCheckoutSession, verifyPayment, handleWebhook } from "../controllers/PaymentController.js";
+import {
+  createCheckoutSession,
+  verifyPayment,
+  handleWebhook,
+  createAppointmentCheckout,
+  verifyAppointmentPayment,
+} from "../controllers/PaymentController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -23,6 +29,18 @@ router.get(
   "/verify",
   protect,
   verifyPayment
+);
+router.post(
+  "/create-appointment-checkout",
+  protect,
+  authorizeRoles("patient"),
+  createAppointmentCheckout
+);
+
+router.get(
+  "/verify-appointment",
+  protect,
+  verifyAppointmentPayment
 );
 
 export default router;

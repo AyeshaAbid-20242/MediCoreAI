@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { verifyPayment } from "../../api/paymentApi";
+import { verifyAppointmentPayment, verifyPayment } from "../../api/paymentApi";
 
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState("verifying");
   const [message, setMessage] = useState("");
+  const [paymentType, setPaymentType] = useState("subscription");
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   useEffect(() => {
     const checkPayment = async () => {
       const sessionId = searchParams.get("session_id");
+      const type = searchParams.get("type") || "subscription";
+      setPaymentType(type);
+
       if (!sessionId) {
         setStatus("error");
         setMessage("Invalid payment session");
@@ -20,15 +24,22 @@ const PaymentSuccess = () => {
       }
 
       try {
-        const data = await verifyPayment(sessionId);
+        const verify = type === "appointment" ? verifyAppointmentPayment : verifyPayment;
+        const data = await verify(sessionId);
         setStatus("success");
         setMessage(data.message);
-        const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
-        localStorage.setItem("user", JSON.stringify({
-          ...savedUser,
-          subscriptionStatus: data.subscription.status,
-          packageName: data.subscription.packageName,
-        }));
+
+        if (type !== "appointment") {
+          const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+          localStorage.setItem(
+            "user",
+            JSON.stringify({
+              ...savedUser,
+              subscriptionStatus: data.subscription?.status,
+              packageName: data.subscription?.packageName,
+            })
+          );
+        }
       } catch (err) {
         setStatus("error");
         setMessage(err.response?.data?.message || "Payment verification failed");
@@ -41,18 +52,20 @@ const PaymentSuccess = () => {
   const handleContinue = () => {
     if (user.role === "doctor") navigate("/doctor/dashboard");
     else if (user.role === "ambulance_driver") navigate("/ambulance/dashboard");
+    else if (user.role === "patient") navigate("/patient/dashboard");
     else navigate("/login");
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#EEF3F6] p-4">
-      <div className="w-full max-w-md rounded-xl border border-[#DDE6EE] bg-white p-8 shadow text-center">
-
+      <div className="w-full max-w-md rounded-xl border border-[#DDE6EE] bg-white p-8 text-center shadow">
         {status === "verifying" && (
           <>
             <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-4 border-[#C8102E] border-t-transparent" />
             <h2 className="text-xl font-black text-[#0A1628]">Verifying Payment</h2>
-            <p className="mt-2 text-sm font-semibold text-[#64748B]">Please wait while we confirm your payment...</p>
+            <p className="mt-2 text-sm font-semibold text-[#64748B]">
+              Please wait while we confirm your payment...
+            </p>
           </>
         )}
 
@@ -65,10 +78,14 @@ const PaymentSuccess = () => {
             </div>
             <h2 className="text-xl font-black text-[#0A1628]">Payment Successful!</h2>
             <p className="mt-2 text-sm font-semibold text-[#64748B]">{message}</p>
-            <p className="mt-1 text-sm font-semibold text-[#64748B]">Your subscription is now active.</p>
+            <p className="mt-1 text-sm font-semibold text-[#64748B]">
+              {paymentType === "appointment"
+                ? "Your appointment payment has been confirmed."
+                : "Your subscription is now active."}
+            </p>
             <button
               onClick={handleContinue}
-              className="mt-6 h-11 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white hover:bg-[#a50d25] transition"
+              className="mt-6 h-11 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white transition hover:bg-[#a50d25]"
             >
               Go to Dashboard
             </button>
@@ -86,7 +103,7 @@ const PaymentSuccess = () => {
             <p className="mt-2 text-sm font-semibold text-[#64748B]">{message}</p>
             <button
               onClick={handleContinue}
-              className="mt-6 h-11 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white hover:bg-[#a50d25] transition"
+              className="mt-6 h-11 w-full rounded-lg bg-[#C8102E] text-sm font-black text-white transition hover:bg-[#a50d25]"
             >
               Back to Dashboard
             </button>
