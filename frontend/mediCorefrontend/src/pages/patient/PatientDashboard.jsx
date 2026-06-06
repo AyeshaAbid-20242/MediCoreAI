@@ -6,7 +6,6 @@ import {
   Area,
   AreaChart,
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Line,
@@ -22,7 +21,7 @@ import { payAppointment, requestAppointment } from "../../api/appointmentApi";
 import { requestAmbulance } from "../../api/ambulanceApi";
 import { getPatientProviders } from "../../api/authApi";
 import { getApiError } from "../../api/axios";
-import { analyzeSymptoms, getAiModels, getNearbyCare } from "../../api/patientApi";
+import { analyzeSymptoms, getAiModels, getNearbyCare, getPatientHealthSummary } from "../../api/patientApi";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -88,24 +87,16 @@ const Icon = ({ name, size = 17, className = "" }) => {
   );
 };
 
-const demoDoctors = [
-  { _id: "d1", name: "Dr. Sarah Chen", specialization: "Cardiology", experience: 8, status: "active", distance: 2.4, rating: 4.9, fee: "Rs. 1,500", patients: 320 },
-  { _id: "d2", name: "Dr. Ahmed Raza", specialization: "General Medicine", experience: 11, status: "approved", distance: 5.7, rating: 4.8, fee: "Rs. 900", patients: 410 },
-  { _id: "d3", name: "Dr. Maria Khan", specialization: "Dermatology", experience: 6, status: "active", distance: 10.8, rating: 4.7, fee: "Rs. 1,200", patients: 244 },
-  { _id: "d4", name: "Dr. Hamza Ali", specialization: "Orthopedic", experience: 9, status: "active", distance: 12.1, rating: 4.6, fee: "Rs. 1,400", patients: 198 },
-];
-
-const demoDrivers = [
-  { _id: "a1", name: "Kamran Ali", vehicleNumber: "AMB-221", ambulanceType: "Basic Life Support", status: "active", distance: 1.8, eta: "5 min", mobileNumber: "0300-1234567" },
-  { _id: "a2", name: "Shahid Raza", vehicleNumber: "AMB-185", ambulanceType: "Cardiac Ambulance", status: "approved", distance: 6.3, eta: "11 min", mobileNumber: "0301-7654321" },
-  { _id: "a3", name: "Tariq Mehmood", vehicleNumber: "AMB-309", ambulanceType: "Oxygen Support", status: "active", distance: 13.2, eta: "18 min", mobileNumber: "0302-9988776" },
-];
-
 const fallbackAiModels = [
   {
     id: "google/gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
     description: "Fast balanced responses for symptom guidance.",
+  },
+  {
+    id: "openai/gpt-4o-mini",
+    name: "GPT-4o Mini",
+    description: "Clear general medical triage explanations.",
   },
 ];
 
@@ -125,6 +116,11 @@ const formatDistance = (item) => {
 const getOsmUrl = (item) => {
   if (!Number.isFinite(item?.lat) || !Number.isFinite(item?.lng)) return null;
   return `https://www.openstreetmap.org/?mlat=${item.lat}&mlon=${item.lng}#map=16/${item.lat}/${item.lng}`;
+};
+
+const matchesWords = (text = "", words = []) => {
+  const normalized = text.toLowerCase();
+  return words.some((word) => normalized.includes(word.toLowerCase()));
 };
 
 const weeklyVitals = [
@@ -302,9 +298,12 @@ const PatientDashboard = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiModels, setAiModels] = useState(fallbackAiModels);
   const [selectedAiModel, setSelectedAiModel] = useState(fallbackAiModels[0].id);
+  const [aiUsage, setAiUsage] = useState({ used: 0, limit: 20, remaining: 20, resetAt: "" });
+  const [careFocus, setCareFocus] = useState(null);
+  const [careFilterMode, setCareFilterMode] = useState("all");
   const [isListening, setIsListening] = useState(false);
   const [emergencyMode, setEmergencyMode] = useState(false);
-  const [providers, setProviders] = useState({ doctors: demoDoctors, ambulanceDrivers: demoDrivers });
+  const [providers, setProviders] = useState({ doctors: [], ambulanceDrivers: [] });
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
   const [nearbyHospitals, setNearbyHospitals] = useState([]);
   const [userLocation, setUserLocation] = useState(defaultLocation);
@@ -323,6 +322,15 @@ const PatientDashboard = () => {
   const [ambulanceMessage, setAmbulanceMessage] = useState("");
   const [ambulanceError, setAmbulanceError] = useState("");
   const [ambulanceLoading, setAmbulanceLoading] = useState(false);
+  const [healthSummary, setHealthSummary] = useState({
+    latestVital: null,
+    vitalsTrend: [],
+    medicalRecords: [],
+    prescriptions: [],
+    departmentMix: [],
+  });
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [healthError, setHealthError] = useState("");
 
   const theme = darkMode ? DARK : LIGHT;
   const user = useMemo(
@@ -350,7 +358,7 @@ const PatientDashboard = () => {
       } catch (error) {
         setNearbyPlaces([]);
         setNearbyHospitals([]);
-        setProviderError("Nearby care service is temporarily unavailable. Please try again shortly.");
+        setProviderError(getApiError(error, "Nearby care service is temporarily unavailable. Please try again shortly."));
         try {
           const response = await getPatientProviders();
           setProviders({
@@ -389,12 +397,36 @@ const PatientDashboard = () => {
 
         setAiModels(models);
         setSelectedAiModel(models[0].id);
+        if (response.data.usage) setAiUsage(response.data.usage);
       } catch {
         setAiModels(fallbackAiModels);
       }
     };
 
     loadAiModels();
+  }, []);
+
+  useEffect(() => {
+    const loadHealthSummary = async () => {
+      setHealthLoading(true);
+      setHealthError("");
+      try {
+        const response = await getPatientHealthSummary();
+        setHealthSummary({
+          latestVital: response.data.latestVital || null,
+          vitalsTrend: response.data.vitalsTrend || [],
+          medicalRecords: response.data.medicalRecords || [],
+          prescriptions: response.data.prescriptions || [],
+          departmentMix: response.data.departmentMix || [],
+        });
+      } catch (error) {
+        setHealthError(getApiError(error, "Could not load health records."));
+      } finally {
+        setHealthLoading(false);
+      }
+    };
+
+    loadHealthSummary();
   }, []);
 
   const doctorSpecs = useMemo(() => {
@@ -410,6 +442,27 @@ const PatientDashboard = () => {
   const nearbyDoctors = providers.doctors.filter((doctor) => (doctor.distance || 7) <= 15);
   const nearbyDrivers = providers.ambulanceDrivers.filter((driver) => (driver.distance || 7) <= 15);
   const visibleHospitals = nearbyHospitals.filter((hospital) => (hospital.distanceMeters || 0) <= 15000);
+  const hospitalPlaces = nearbyPlaces.filter((place) =>
+    ["hospital", "clinic", "emergency"].includes(place.type)
+  );
+  const focusWords = careFocus?.hospitalKeywords || [];
+  const recommendedDoctors = careFocus
+    ? nearbyDoctors.filter((doctor) =>
+        matchesWords(doctor.specialization || doctor.name || doctor.fullName, [
+          careFocus.specialty,
+          ...focusWords,
+        ])
+      )
+    : [];
+  const recommendedHospitals = careFocus
+    ? hospitalPlaces.filter((place) =>
+        matchesWords(`${place.name} ${place.category} ${place.address}`, focusWords)
+      )
+    : [];
+  const displayedHospitalPlaces =
+    careFilterMode === "recommended" && recommendedHospitals.length
+      ? recommendedHospitals
+      : hospitalPlaces;
   const nearestByType = (types) =>
     nearbyPlaces.find((place) => types.includes(place.type)) || null;
   const nearbySummary = [
@@ -417,6 +470,58 @@ const PatientDashboard = () => {
     ["Nearest Clinic", nearestByType(["clinic"])],
     ["Nearest Pharmacy", nearestByType(["pharmacy"])],
     ["Total Places", { name: `${nearbyPlaces.length} found`, distanceMeters: null }],
+  ];
+
+  const latestVital = healthSummary.latestVital;
+  const weeklyVitals = healthSummary.vitalsTrend.filter(
+    (item) => item.heart !== null || item.oxygen !== null || item.temp !== null
+  );
+  const records = healthSummary.medicalRecords.map((record) => ({
+    id: record._id,
+    title: record.title,
+    date: new Date(record.recordDate).toLocaleDateString(),
+    doctor: record.doctorId?.fullName || record.doctorId?.name || record.department || "Medical record",
+    status: record.status,
+    summary: record.summary,
+  }));
+  const prescriptions = healthSummary.prescriptions.map((item) => ({
+    id: item._id,
+    medicine: item.medicine,
+    schedule: item.schedule,
+    days: item.duration || item.status,
+    instructions: item.instructions,
+  }));
+  const departmentMix = healthSummary.departmentMix.map((item, index) => ({
+    ...item,
+    color: ["#0891B2", "#C8102E", "#059669", "#F59E0B", "#6366F1"][index % 5],
+    dot: ["bg-[#0891B2]", "bg-[#C8102E]", "bg-[#059669]", "bg-[#F59E0B]", "bg-[#6366F1]"][index % 5],
+  }));
+  const recoveryTrend = records
+    .slice()
+    .reverse()
+    .map((record, index) => ({
+      month: record.date,
+      symptoms: Math.max(records.length - index, 0),
+      visits: 1,
+    }));
+  const vitals = [
+    { label: "Heart Rate", value: latestVital?.heartRate ? `${latestVital.heartRate} bpm` : "Not recorded", tone: "text-[#C8102E]" },
+    {
+      label: "Blood Pressure",
+      value:
+        latestVital?.bloodPressureSystolic && latestVital?.bloodPressureDiastolic
+          ? `${latestVital.bloodPressureSystolic}/${latestVital.bloodPressureDiastolic}`
+          : "Not recorded",
+      tone: "text-[#0891B2]",
+    },
+    { label: "O2 Saturation", value: latestVital?.oxygenSaturation ? `${latestVital.oxygenSaturation}%` : "Not recorded", tone: "text-[#059669]" },
+    { label: "Temperature", value: latestVital?.temperatureCelsius ? `${latestVital.temperatureCelsius} C` : "Not recorded", tone: "text-[#F59E0B]" },
+  ];
+  const statCards = [
+    ["Care Score", latestVital ? "Active" : "New", healthLoading ? "loading records" : `${weeklyVitals.length} vitals`, "heart", "bg-[#C8102E]/10 text-[#C8102E]"],
+    ["Appointments", "Live", "from appointment API", "doctor", "bg-[#0891B2]/10 text-[#0891B2]"],
+    ["Reports", records.length, `${records.filter((record) => record.status === "reviewed").length} reviewed`, "file", "bg-[#059669]/10 text-[#059669]"],
+    ["Emergency ETA", nearbyDrivers.length ? "Ready" : "N/A", `${nearbyDrivers.length} drivers`, "ambulance", "bg-[#F59E0B]/10 text-[#F59E0B]"],
   ];
 
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
@@ -440,11 +545,17 @@ const PatientDashboard = () => {
       const response = await analyzeSymptoms({ message: text, model: selectedAiModel });
       const modelName =
         aiModels.find((model) => model.id === response.data.model)?.name || response.data.model;
+      if (response.data.usage) setAiUsage(response.data.usage);
+      if (response.data.careFocus) {
+        setCareFocus(response.data.careFocus);
+        setCareFilterMode("recommended");
+      }
       setChatMessages((messages) => [
         ...messages,
         { sender: "ai", text: response.data.answer, model: modelName },
       ]);
     } catch (error) {
+      if (error.response?.data?.usage) setAiUsage(error.response.data.usage);
       setChatMessages((messages) => [
         ...messages,
         { sender: "ai", text: getApiError(error, "Could not analyze symptoms right now.") },
@@ -737,30 +848,33 @@ const PatientDashboard = () => {
             </div>
 
             {activeNav === "AI Chat" && (
-              <section className={`${cardClass} p-4`}>
+              <section className={`${cardClass} mx-auto w-full max-w-6xl p-4 lg:p-5`}>
                 <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
-                <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
-                  <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>AI Model</label>
-                  <select
-                    value={selectedAiModel}
-                    onChange={(event) => setSelectedAiModel(event.target.value)}
-                    className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-sm font-bold ${theme.text} outline-none`}
-                  >
-                    {aiModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className={`mt-1 text-xs ${theme.subtext}`}>
-                    {aiModels.find((model) => model.id === selectedAiModel)?.description}
-                  </p>
+                <div className={`mt-3 grid gap-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-3 md:grid-cols-[1fr_auto]`}>
+                  <div>
+                    <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>AI Model</label>
+                    <select
+                      value={selectedAiModel}
+                      onChange={(event) => setSelectedAiModel(event.target.value)}
+                      className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-sm font-bold ${theme.text} outline-none`}
+                    >
+                      {aiModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className={`mt-1 text-xs ${theme.subtext}`}>
+                      {aiModels.find((model) => model.id === selectedAiModel)?.description}
+                    </p>
+                  </div>
+                  <AIUsageRing usage={aiUsage} theme={theme} />
                 </div>
-                <div className={`mt-3 h-[360px] space-y-2 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                <div className={`mt-3 max-h-[62vh] min-h-[430px] space-y-3 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3 lg:p-4`}>
                   {chatMessages.map((message, index) => (
                     <div
                       key={`${message.sender}-${index}`}
-                      className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                      className={`max-w-[96%] whitespace-pre-line rounded-lg px-4 py-3 text-sm leading-7 md:max-w-[82%] ${
                         message.sender === "patient"
                           ? "ml-auto bg-[#C8102E] text-white"
                           : `${theme.panel} ${theme.text} border ${theme.border}`
@@ -776,11 +890,11 @@ const PatientDashboard = () => {
                   ))}
                   {aiLoading && <p className={`text-xs font-bold ${theme.subtext}`}>AI is reviewing...</p>}
                 </div>
-                <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
+                <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
                   <textarea
                     value={symptomText}
                     onChange={(event) => setSymptomText(event.target.value)}
-                    className={`h-20 w-full resize-none bg-transparent px-1 text-sm outline-none ${theme.text} placeholder:text-slate-400`}
+                    className={`h-24 w-full resize-none bg-transparent px-1 text-sm leading-6 outline-none ${theme.text} placeholder:text-slate-400`}
                     placeholder="Describe symptoms or ask about your prescription..."
                   />
                   <div className="flex items-center justify-between gap-2">
@@ -801,6 +915,23 @@ const PatientDashboard = () => {
                     </button>
                   </div>
                 </div>
+                <CareMatchPanel
+                  careFocus={careFocus}
+                  doctors={recommendedDoctors}
+                  hospitals={recommendedHospitals}
+                  drivers={nearbyDrivers}
+                  theme={theme}
+                  onBook={openBooking}
+                  onRequestAmbulance={openAmbulanceRequest}
+                  onShowRecommended={() => {
+                    setCareFilterMode("recommended");
+                    setActiveNav("Hospitals");
+                  }}
+                  onShowAll={() => {
+                    setCareFilterMode("all");
+                    setActiveNav("Hospitals");
+                  }}
+                />
               </section>
             )}
 
@@ -842,10 +973,36 @@ const PatientDashboard = () => {
             {activeNav === "Hospitals" && (
               <section className={`${cardClass} p-4`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <PanelTitle title="Nearby Care" subtitle="OpenStreetMap results within 15 km" theme={theme} />
-                  <span className={`rounded-md border ${theme.border} px-2 py-1 text-[11px] font-black ${theme.subtext}`}>
-                    {nearbyLoading ? "Scanning..." : locationStatus}
-                  </span>
+                  <div>
+                    <PanelTitle title="Nearby Care" subtitle="OpenStreetMap hospitals and clinics within 15 km" theme={theme} />
+                    {careFocus && (
+                      <p className={`mt-1 text-xs font-semibold ${theme.subtext}`}>
+                        Current focus: {careFocus.specialty}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setCareFilterMode("all")}
+                      className={`h-8 rounded-lg px-3 text-xs font-black ${
+                        careFilterMode === "all" ? "bg-[#0A1628] text-white" : `border ${theme.border} ${theme.text}`
+                      }`}
+                    >
+                      All hospitals
+                    </button>
+                    <button
+                      onClick={() => setCareFilterMode("recommended")}
+                      disabled={!careFocus}
+                      className={`h-8 rounded-lg px-3 text-xs font-black disabled:opacity-50 ${
+                        careFilterMode === "recommended" ? "bg-[#C8102E] text-white" : `border ${theme.border} ${theme.text}`
+                      }`}
+                    >
+                      Recommended
+                    </button>
+                    <span className={`rounded-md border ${theme.border} px-2 py-1 text-[11px] font-black ${theme.subtext}`}>
+                      {nearbyLoading ? "Scanning..." : locationStatus}
+                    </span>
+                  </div>
                 </div>
 
                 {providerError && (
@@ -867,11 +1024,11 @@ const PatientDashboard = () => {
                 </div>
 
                 <div className={`mt-4 overflow-hidden rounded-lg border ${theme.border}`}>
-                  <NearbyCareMap userLocation={userLocation} places={nearbyPlaces} />
+                  <NearbyCareMap userLocation={userLocation} places={displayedHospitalPlaces} />
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {nearbyPlaces.map((place) => {
+                  {displayedHospitalPlaces.map((place) => {
                     const osmUrl = getOsmUrl(place);
                     return (
                       <div key={place.id || place.name} className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
@@ -911,7 +1068,13 @@ const PatientDashboard = () => {
                   })}
                 </div>
 
-                {!nearbyLoading && nearbyPlaces.length === 0 && !providerError && (
+                {careFilterMode === "recommended" && careFocus && !recommendedHospitals.length && (
+                  <div className="mt-4 rounded-lg border border-[#FEF3C7] bg-[#FFFBEB] px-3 py-2 text-sm font-bold text-[#92400E]">
+                    No hospital name in OpenStreetMap matched {careFocus.specialty}; showing all nearby hospitals instead.
+                  </div>
+                )}
+
+                {!nearbyLoading && displayedHospitalPlaces.length === 0 && !providerError && (
                   <div className={`${softClass} mt-4 p-6 text-sm font-bold ${theme.subtext}`}>
                     No nearby healthcare places were found in OpenStreetMap for this radius.
                   </div>
@@ -922,17 +1085,27 @@ const PatientDashboard = () => {
             {activeNav === "Records" && (
               <section className={`${cardClass} p-4`}>
                 <PanelTitle title="History & Prescriptions" subtitle="Latest records and medication" theme={theme} />
+                {healthError && (
+                  <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">
+                    {healthError}
+                  </div>
+                )}
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {records.map((record) => (
-                    <div key={record.title} className={`${softClass} p-3`}>
+                    <div key={record.id} className={`${softClass} p-3`}>
                       <p className={`text-sm font-black ${theme.text}`}>{record.title}</p>
                       <p className={`text-xs ${theme.subtext}`}>{record.doctor} - {record.date}</p>
                     </div>
                   ))}
+                  {!records.length && (
+                    <div className={`${softClass} p-4 text-sm font-semibold ${theme.subtext}`}>
+                      {healthLoading ? "Loading medical records..." : "No medical records saved yet."}
+                    </div>
+                  )}
                 </div>
                 <div className={`mt-4 border-t ${theme.border} pt-4`}>
                   {prescriptions.map((item) => (
-                    <div key={item.medicine} className="flex items-center justify-between py-2">
+                    <div key={item.id} className="flex items-center justify-between py-2">
                       <div>
                         <p className={`text-sm font-black ${theme.text}`}>{item.medicine}</p>
                         <p className={`text-xs ${theme.subtext}`}>{item.schedule}</p>
@@ -942,6 +1115,11 @@ const PatientDashboard = () => {
                       </span>
                     </div>
                   ))}
+                  {!prescriptions.length && (
+                    <p className={`py-3 text-sm font-semibold ${theme.subtext}`}>
+                      {healthLoading ? "Loading prescriptions..." : "No prescriptions saved yet."}
+                    </p>
+                  )}
                 </div>
               </section>
             )}
@@ -1001,17 +1179,23 @@ const PatientDashboard = () => {
                   <section className={`${cardClass} p-4`}>
                     <PanelTitle title="Weekly Vitals" subtitle="Heart, oxygen, and temperature trend" theme={theme} />
                     <div className="h-[268px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={weeklyVitals} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
-                          <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="day" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                          <Tooltip {...chartTooltip(theme)} />
-                          <Line type="monotone" dataKey="heart" stroke="#C8102E" strokeWidth={2.4} dot={false} />
-                          <Line type="monotone" dataKey="oxygen" stroke="#0891B2" strokeWidth={2.4} dot={false} />
-                          <Line type="monotone" dataKey="temp" stroke="#059669" strokeWidth={2.4} dot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      {weeklyVitals.length ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={weeklyVitals} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
+                            <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="day" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <Tooltip {...chartTooltip(theme)} />
+                            <Line type="monotone" dataKey="heart" stroke="#C8102E" strokeWidth={2.4} dot={false} />
+                            <Line type="monotone" dataKey="oxygen" stroke="#0891B2" strokeWidth={2.4} dot={false} />
+                            <Line type="monotone" dataKey="temp" stroke="#059669" strokeWidth={2.4} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className={`flex h-full items-center justify-center rounded-lg border ${theme.border} ${theme.panelMuted} p-4 text-center text-sm font-semibold ${theme.subtext}`}>
+                          {healthLoading ? "Loading vitals..." : "No vitals recorded yet. Add vitals through the patient vitals API."}
+                        </div>
+                      )}
                     </div>
                   </section>
 
@@ -1034,24 +1218,27 @@ const PatientDashboard = () => {
                 <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
                   <section className={`${cardClass} p-4`}>
                     <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
-                    <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
-                      <select
-                        value={selectedAiModel}
-                        onChange={(event) => setSelectedAiModel(event.target.value)}
-                        className={`h-9 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs font-bold ${theme.text} outline-none`}
-                      >
-                        {aiModels.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.name}
-                          </option>
-                        ))}
-                      </select>
+                    <div className={`mt-3 grid gap-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2 sm:grid-cols-[1fr_auto]`}>
+                      <div>
+                        <select
+                          value={selectedAiModel}
+                          onChange={(event) => setSelectedAiModel(event.target.value)}
+                          className={`h-9 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs font-bold ${theme.text} outline-none`}
+                        >
+                          {aiModels.map((model) => (
+                            <option key={model.id} value={model.id}>
+                              {model.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <AIUsageRing usage={aiUsage} theme={theme} />
                     </div>
-                    <div className={`mt-3 h-[210px] space-y-2 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+                    <div className={`mt-3 h-[300px] space-y-3 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
                       {chatMessages.map((message, index) => (
                         <div
                           key={`${message.sender}-${index}`}
-                          className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                          className={`max-w-[95%] whitespace-pre-line rounded-lg px-3 py-2 text-sm leading-6 ${
                             message.sender === "patient"
                               ? "ml-auto bg-[#C8102E] text-white"
                               : `${theme.panel} ${theme.text} border ${theme.border}`
@@ -1092,27 +1279,50 @@ const PatientDashboard = () => {
                         </button>
                       </div>
                     </div>
+                    <CareMatchPanel
+                      careFocus={careFocus}
+                      doctors={recommendedDoctors}
+                      hospitals={recommendedHospitals}
+                      drivers={nearbyDrivers}
+                      theme={theme}
+                      onBook={openBooking}
+                      onRequestAmbulance={openAmbulanceRequest}
+                      onShowRecommended={() => {
+                        setCareFilterMode("recommended");
+                        setActiveNav("Hospitals");
+                      }}
+                      onShowAll={() => {
+                        setCareFilterMode("all");
+                        setActiveNav("Hospitals");
+                      }}
+                    />
                   </section>
 
                   <section className={`${cardClass} p-4`}>
                     <PanelTitle title="Recovery Analytics" subtitle="Symptoms declining over time" theme={theme} />
                     <div className="h-[322px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={recoveryTrend} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="symptomsFill" x1="0" x2="0" y1="0" y2="1">
-                              <stop offset="5%" stopColor="#0891B2" stopOpacity={0.28} />
-                              <stop offset="95%" stopColor="#0891B2" stopOpacity={0.02} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                          <Tooltip {...chartTooltip(theme)} />
-                          <Area type="monotone" dataKey="symptoms" stroke="#0891B2" strokeWidth={2.4} fill="url(#symptomsFill)" />
-                          <Bar dataKey="visits" fill="#C8102E" radius={[4, 4, 0, 0]} barSize={16} />
-                        </AreaChart>
-                      </ResponsiveContainer>
+                      {recoveryTrend.length ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={recoveryTrend} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="symptomsFill" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="5%" stopColor="#0891B2" stopOpacity={0.28} />
+                                <stop offset="95%" stopColor="#0891B2" stopOpacity={0.02} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <Tooltip {...chartTooltip(theme)} />
+                            <Area type="monotone" dataKey="symptoms" stroke="#0891B2" strokeWidth={2.4} fill="url(#symptomsFill)" />
+                            <Bar dataKey="visits" fill="#C8102E" radius={[4, 4, 0, 0]} barSize={16} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className={`flex h-full items-center justify-center rounded-lg border ${theme.border} ${theme.panelMuted} p-4 text-center text-sm font-semibold ${theme.subtext}`}>
+                          {healthLoading ? "Loading recovery records..." : "No medical records yet for recovery analytics."}
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
@@ -1176,22 +1386,28 @@ const PatientDashboard = () => {
                 <section className={`${cardClass} p-4`}>
                   <PanelTitle title="Department Mix" subtitle="Recent care categories" theme={theme} />
                   <div className="mt-2 h-[210px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={departmentMix}
-                          innerRadius={56}
-                          outerRadius={78}
-                          paddingAngle={4}
-                          dataKey="value"
-                        >
-                          {departmentMix.map((entry) => (
-                            <Cell key={entry.name} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip {...chartTooltip(theme)} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {departmentMix.length ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={departmentMix}
+                            innerRadius={56}
+                            outerRadius={78}
+                            paddingAngle={4}
+                            dataKey="value"
+                          >
+                            {departmentMix.map((entry) => (
+                              <Cell key={entry.name} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip {...chartTooltip(theme)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className={`flex h-full items-center justify-center rounded-lg border ${theme.border} ${theme.panelMuted} p-4 text-center text-sm font-semibold ${theme.subtext}`}>
+                        {healthLoading ? "Loading categories..." : "No care categories yet."}
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {departmentMix.map((item) => (
@@ -1216,15 +1432,20 @@ const PatientDashboard = () => {
                   <PanelTitle title="History & Prescriptions" subtitle="Latest records and medication" theme={theme} />
                   <div className="mt-3 space-y-2">
                     {records.map((record) => (
-                      <div key={record.title} className={`${softClass} p-3`}>
+                      <div key={record.id} className={`${softClass} p-3`}>
                         <p className={`text-sm font-black ${theme.text}`}>{record.title}</p>
                         <p className={`text-xs ${theme.subtext}`}>{record.doctor} - {record.date}</p>
                       </div>
                     ))}
+                    {!records.length && (
+                      <p className={`py-3 text-sm font-semibold ${theme.subtext}`}>
+                        {healthLoading ? "Loading records..." : "No medical records saved yet."}
+                      </p>
+                    )}
                   </div>
                   <div className={`mt-3 border-t ${theme.border} pt-3`}>
                     {prescriptions.map((item) => (
-                      <div key={item.medicine} className="flex items-center justify-between py-1.5">
+                      <div key={item.id} className="flex items-center justify-between py-1.5">
                         <div>
                           <p className={`text-xs font-black ${theme.text}`}>{item.medicine}</p>
                           <p className={`text-[11px] ${theme.subtext}`}>{item.schedule}</p>
@@ -1234,6 +1455,11 @@ const PatientDashboard = () => {
                         </span>
                       </div>
                     ))}
+                    {!prescriptions.length && (
+                      <p className={`py-3 text-sm font-semibold ${theme.subtext}`}>
+                        {healthLoading ? "Loading prescriptions..." : "No prescriptions saved yet."}
+                      </p>
+                    )}
                   </div>
                 </section>
               </aside>
@@ -1287,6 +1513,96 @@ const MiniCount = ({ label, value, theme }) => (
   </div>
 );
 
+const AIUsageRing = ({ usage, theme }) => {
+  const used = usage?.used || 0;
+  const limit = usage?.limit || 1;
+  const percent = Math.min(Math.round((used / limit) * 100), 100);
+  const resetText = usage?.resetAt
+    ? new Date(usage.resetAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "soon";
+
+  return (
+    <div className="flex min-w-[150px] items-center gap-3">
+      <div
+        className="grid h-12 w-12 shrink-0 place-items-center rounded-full sm:h-14 sm:w-14"
+        style={{ background: `conic-gradient(#C8102E ${percent}%, #DDE6EE ${percent}% 100%)` }}
+      >
+        <div className={`grid h-9 w-9 place-items-center rounded-full sm:h-10 sm:w-10 ${theme.panel}`}>
+          <span className={`text-xs font-black ${theme.text}`}>{usage?.remaining ?? 0}</span>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <p className={`text-xs font-black ${theme.text}`}>{used}/{limit} used</p>
+        <p className={`text-[11px] font-semibold ${theme.subtext}`}>Resets {resetText}</p>
+      </div>
+    </div>
+  );
+};
+
+const CareMatchPanel = ({
+  careFocus,
+  doctors,
+  hospitals,
+  drivers,
+  theme,
+  onShowRecommended,
+  onShowAll,
+  onBook,
+  onRequestAmbulance,
+}) => {
+  if (!careFocus) return null;
+
+  const shownDoctors = doctors.length ? doctors : [];
+  const shownHospitals = hospitals.length ? hospitals : [];
+
+  return (
+    <section className={`mt-4 rounded-lg border ${theme.border} ${theme.panelMuted} p-4`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className={`text-base font-black ${theme.text}`}>{careFocus.specialty} focus</p>
+          <p className={`mt-1 text-sm font-semibold leading-6 ${theme.subtext}`}>{careFocus.note}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={onShowRecommended} className="h-9 rounded-lg bg-[#C8102E] px-4 text-xs font-black text-white">
+            Recommended
+          </button>
+          <button onClick={onShowAll} className={`h-9 rounded-lg border ${theme.border} px-4 text-xs font-black ${theme.text}`}>
+            All hospitals
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        <CareMiniList title="Platform Doctors" items={shownDoctors} empty="No matching platform doctor yet." theme={theme} onAction={onBook} actionLabel="Book" />
+        <CareMiniList title="Nearby Hospitals" items={shownHospitals} empty="No specialty-tagged hospital found, use all hospitals." theme={theme} />
+        <CareMiniList title="Ambulances" items={drivers.slice(0, 3)} empty="No ambulance drivers nearby." theme={theme} onAction={onRequestAmbulance} actionLabel="Request" />
+      </div>
+    </section>
+  );
+};
+
+const CareMiniList = ({ title, items, empty, theme, onAction, actionLabel }) => (
+  <div className={`min-w-0 rounded-lg border ${theme.border} ${theme.panel} p-3`}>
+    <p className={`mb-3 text-xs font-black uppercase tracking-[0.12em] ${theme.subtext}`}>{title}</p>
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+      {items.slice(0, 3).map((item) => (
+        <div key={item.id || item._id || item.name} className={`min-w-0 rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+          <p className={`break-words text-sm font-black leading-5 ${theme.text}`}>{item.name || item.fullName}</p>
+          <p className={`mt-1 break-words text-xs leading-5 ${theme.subtext}`}>
+            {item.specialization || item.category || item.vehicleNumber || "Available"} - {formatDistance(item)}
+          </p>
+          {onAction && (
+            <button onClick={() => onAction(item)} className="mt-3 h-8 rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white">
+              {actionLabel}
+            </button>
+          )}
+        </div>
+      ))}
+      {!items.length && <p className={`text-sm font-semibold leading-6 ${theme.subtext}`}>{empty}</p>}
+    </div>
+  </div>
+);
+
 const ProviderTable = ({ providers, type, theme, onBook }) => (
   <div>
     <div className="space-y-3 p-3 md:hidden">
@@ -1299,14 +1615,14 @@ const ProviderTable = ({ providers, type, theme, onBook }) => (
             <div className="min-w-0 flex-1">
               <p className={`truncate text-sm font-black ${theme.text}`}>{provider.name || provider.fullName}</p>
               <p className={`mt-0.5 text-xs font-semibold ${theme.subtext}`}>
-                {provider.specialization || "General Medicine"} - {provider.distance || 7.5} km
+                {provider.specialization || "General Medicine"} - {formatDistance(provider)}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
                   {(provider.status || "active").toUpperCase()}
                 </span>
                 <span className={`rounded-md border ${theme.border} px-2 py-1 text-[11px] font-black ${theme.text}`}>
-                  Rating {provider.rating || 4.7}
+                  Rating {provider.rating || "Not rated"}
                 </span>
               </div>
             </div>
@@ -1316,6 +1632,11 @@ const ProviderTable = ({ providers, type, theme, onBook }) => (
           </button>
         </div>
       ))}
+      {!providers.length && (
+        <p className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-4 text-sm font-semibold ${theme.subtext}`}>
+          No verified subscribed doctors are available yet.
+        </p>
+      )}
     </div>
 
     <div className="hidden overflow-x-auto md:block">
@@ -1340,15 +1661,15 @@ const ProviderTable = ({ providers, type, theme, onBook }) => (
                 </div>
                 <div>
                   <p className={`text-sm font-black ${theme.text}`}>{provider.name || provider.fullName}</p>
-                  <p className={`text-xs ${theme.subtext}`}>{provider.patients || 120} patients</p>
+                  <p className={`text-xs ${theme.subtext}`}>{provider.email || "Verified provider"}</p>
                 </div>
               </div>
             </td>
             <td className={`px-4 py-3 text-sm font-semibold ${theme.text}`}>
               {provider.specialization || "General Medicine"}
             </td>
-            <td className={`px-4 py-3 text-sm ${theme.subtext}`}>{provider.distance || 7.5} km</td>
-            <td className={`px-4 py-3 text-sm font-bold ${theme.text}`}>{provider.rating || 4.7}</td>
+            <td className={`px-4 py-3 text-sm ${theme.subtext}`}>{formatDistance(provider)}</td>
+            <td className={`px-4 py-3 text-sm font-bold ${theme.text}`}>{provider.rating || "Not rated"}</td>
             <td className="px-4 py-3">
               <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
                 {(provider.status || "active").toUpperCase()}
@@ -1363,6 +1684,11 @@ const ProviderTable = ({ providers, type, theme, onBook }) => (
         ))}
       </tbody>
       </table>
+      {!providers.length && (
+        <p className={`border-t ${theme.border} px-4 py-6 text-sm font-semibold ${theme.subtext}`}>
+          No verified subscribed doctors are available yet.
+        </p>
+      )}
     </div>
   </div>
 );

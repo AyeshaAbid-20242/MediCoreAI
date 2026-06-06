@@ -1,5 +1,6 @@
 import { useState } from "react";
-import AmbulanceSidebar, { navItems } from "./AmbulanceSidebar";
+import AmbulanceSidebar from "./AmbulanceSidebar";
+import { ambulanceNavItems } from "../sidebarNav";
 
 const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMode, theme, children }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -38,7 +39,7 @@ const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMod
           </button>
         </div>
         <nav className="space-y-1 p-4">
-          {navItems.map(([key, label]) => (
+          {ambulanceNavItems.map(([key, label]) => (
             <button
               key={key}
               onClick={() => { setActiveTab(key); setMenuOpen(false); }}
@@ -95,9 +96,10 @@ const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMod
                 {/* Dark mode toggle */}
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-16 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-xs font-black ${theme.text}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg font-black ${theme.text}`}
+                  aria-label="Toggle dark mode"
                 >
-                  {darkMode ? "Light" : "Dark"}
+                  {darkMode ? "☀" : "◐"}
                 </button>
 
                 {/* Driver Info */}

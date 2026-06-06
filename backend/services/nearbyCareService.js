@@ -1,4 +1,8 @@
 const DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+const FALLBACK_OVERPASS_URLS = [
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
 
 const categoryLabels = {
   hospital: "Hospital",
@@ -99,39 +103,48 @@ const removeDuplicates = (places) => {
 };
 
 const fetchNearbyCareFromOsm = async ({ lat, lng, radius }) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const endpoints = [process.env.OVERPASS_API_URL || DEFAULT_OVERPASS_URL, ...FALLBACK_OVERPASS_URLS];
+  const query = buildOverpassQuery({ lat, lng, radius });
+  const body = new URLSearchParams({ data: query });
 
-  try {
-    const response = await fetch(process.env.OVERPASS_API_URL || DEFAULT_OVERPASS_URL, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "User-Agent": "MediCore/1.0 local-development",
-      },
-      body: new URLSearchParams({
-        data: buildOverpassQuery({ lat, lng, radius }),
-      }),
-      signal: controller.signal,
-    });
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Overpass returned ${response.status}: ${errorText.slice(0, 300)}`);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "User-Agent": "MediCore/1.0 local-development",
+        },
+        body,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Overpass returned ${response.status}: ${errorText.slice(0, 300)}`);
+      }
+
+      const data = await response.json();
+      const places = (data.elements || [])
+        .map((element) => mapElementToPlace(element, lat, lng))
+        .filter(Boolean);
+
+      return removeDuplicates(places).sort(
+        (first, second) => first.distanceMeters - second.distanceMeters
+      );
+    } catch (error) {
+      console.error("Nearby care fetch failed for endpoint", endpoint, error.message);
+      // try next endpoint
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const data = await response.json();
-    const places = (data.elements || [])
-      .map((element) => mapElementToPlace(element, lat, lng))
-      .filter(Boolean);
-
-    return removeDuplicates(places).sort(
-      (first, second) => first.distanceMeters - second.distanceMeters
-    );
-  } finally {
-    clearTimeout(timeout);
   }
+
+  throw new Error("Unable to fetch nearby care from Overpass API endpoints.");
 };
 
 export { fetchNearbyCareFromOsm, getDistanceMeters };

@@ -2,7 +2,6 @@ import { motion } from "framer-motion";
 
 const Reviews = ({ reviews, onDelete, theme }) => {
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
-  const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
 
   return (
     <div className="space-y-5">

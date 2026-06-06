@@ -3,7 +3,6 @@ import { useState } from "react";
 
 const AllUsers = ({ allUsers, roleFilter, statusFilter, setRoleFilter, setStatusFilter, onDelete, onExport, onEdit, onBlockUnblock, onResendPassword, theme }) => {
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
-  const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
   const inputClass = `h-9 rounded-lg border ${theme.border} ${theme.panel} px-3 text-sm font-medium ${theme.text} focus:outline-none focus:border-[#C8102E]`;
 
   const [editModal, setEditModal] = useState(null);

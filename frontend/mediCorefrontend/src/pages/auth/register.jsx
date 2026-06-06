@@ -9,6 +9,8 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -65,7 +67,8 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const { confirmPassword, ...payload } = formData;
+      const { confirmPassword: _unusedConfirmPassword, ...payload } = formData;
+      void _unusedConfirmPassword;
       const res = await registerUser(payload);
       const tempPasswordText = res.data.tempPassword
         ? ` Temporary password: ${res.data.tempPassword}`
@@ -159,31 +162,27 @@ const Register = () => {
           {/* Role */}
           <div>
             <label className="text-gray-400 text-sm mb-1 block">Password</label>
-            <input
-              type="password"
+            <PasswordInput
               name="password"
               value={formData.password}
               onChange={handleChange}
               placeholder="Create a password"
-              required
-              minLength={8}
-              className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
-                ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
+              darkMode={darkMode}
+              show={showPassword}
+              setShow={setShowPassword}
             />
           </div>
 
           <div>
             <label className="text-gray-400 text-sm mb-1 block">Confirm Password</label>
-            <input
-              type="password"
+            <PasswordInput
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
               placeholder="Confirm your password"
-              required
-              minLength={8}
-              className={`w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
-                ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`}
+              darkMode={darkMode}
+              show={showConfirmPassword}
+              setShow={setShowConfirmPassword}
             />
           </div>
 
@@ -311,5 +310,34 @@ const Register = () => {
     </div>
   );
 };
+
+const PasswordInput = ({ darkMode, show, setShow, ...props }) => (
+  <div className="relative">
+    <input
+      {...props}
+      type={show ? "text" : "password"}
+      required
+      minLength={8}
+      className={`w-full rounded-lg border px-4 py-3 pr-12 text-sm transition-colors duration-300 focus:border-red-500 focus:outline-none
+        ${darkMode ? "border-gray-700 bg-[#0f1623] text-white" : "border-gray-300 bg-gray-100 text-gray-800"}`}
+    />
+    <button
+      type="button"
+      onClick={() => setShow(!show)}
+      className={`absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md ${darkMode ? "text-gray-400" : "text-gray-500"} hover:text-red-400`}
+      aria-label={show ? "Hide password" : "Show password"}
+    >
+      <EyeIcon crossed={show} />
+    </button>
+  </div>
+);
+
+const EyeIcon = ({ crossed }) => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+    {crossed && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4l16 16" />}
+  </svg>
+);
 
 export default Register;

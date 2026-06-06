@@ -1,5 +1,6 @@
 import { useState } from "react";
-import DoctorSidebar, { navItems } from "./DoctorSidebar";
+import DoctorSidebar from "./DoctorSidebar";
+import { doctorNavItems } from "../sidebarNav";
 
 const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, theme, children }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,7 +36,7 @@ const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, 
           </button>
         </div>
         <nav className="space-y-1.5 p-4">
-          {navItems.map(([key, label]) => (
+          {doctorNavItems.map(([key, label]) => (
             <button
               key={key}
               onClick={() => {
@@ -77,10 +78,10 @@ const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-16 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-xs font-black ${theme.text}`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg font-black ${theme.text}`}
                   aria-label="Toggle dark mode"
                 >
-                  {darkMode ? "Light" : "Dark"}
+                  {darkMode ? "☀" : "◐"}
                 </button>
                 <div className="rounded-lg bg-[#C8102E] px-3 py-2 text-xs font-black text-white">
                   {(doctor?.status || "pending").toUpperCase()}

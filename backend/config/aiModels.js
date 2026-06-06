@@ -5,9 +5,19 @@ const defaultModels = [
     description: "Fast balanced responses for symptom guidance.",
   },
   {
+    id: "google/gemini-2.5-flash-lite",
+    name: "Gemini 2.5 Flash Lite",
+    description: "Lower-cost quick answers.",
+  },
+  {
     id: "openai/gpt-4o-mini",
     name: "GPT-4o Mini",
     description: "Clear general medical triage explanations.",
+  },
+  {
+    id: "openai/gpt-4.1-mini",
+    name: "GPT-4.1 Mini",
+    description: "Balanced OpenAI option for detailed guidance.",
   },
   {
     id: "anthropic/claude-3.5-haiku",
@@ -15,9 +25,19 @@ const defaultModels = [
     description: "Short, careful, patient-friendly answers.",
   },
   {
+    id: "mistralai/mistral-small-3.2-24b-instruct",
+    name: "Mistral Small",
+    description: "Good lightweight medical explanations.",
+  },
+  {
     id: "meta-llama/llama-3.1-8b-instruct",
     name: "Llama 3.1 8B",
     description: "Open model option for simple questions.",
+  },
+  {
+    id: "meta-llama/llama-3.3-70b-instruct",
+    name: "Llama 3.3 70B",
+    description: "Stronger open model for richer answers.",
   },
 ];
 

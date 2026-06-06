@@ -21,18 +21,21 @@ const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setForm({
-      name: driver?.name || "",
-      city: driver?.city || "",
-      mobileNumber: driver?.mobileNumber || "",
-      vehicleNumber: driver?.vehicleNumber || "",
-      ambulanceType: driver?.ambulanceType || "",
-      drivingLicenseNumber: driver?.drivingLicenseNumber || "",
-      driverExperience: driver?.driverExperience || "",
-      hasOxygen: driver?.hasOxygen || false,
-      hasStretcher: driver?.hasStretcher || false,
-      profileImageUrl: driver?.profileImageUrl || "",
-    });
+    const timer = setTimeout(() => {
+      setForm({
+        name: driver?.name || "",
+        city: driver?.city || "",
+        mobileNumber: driver?.mobileNumber || "",
+        vehicleNumber: driver?.vehicleNumber || "",
+        ambulanceType: driver?.ambulanceType || "",
+        drivingLicenseNumber: driver?.drivingLicenseNumber || "",
+        driverExperience: driver?.driverExperience || "",
+        hasOxygen: driver?.hasOxygen || false,
+        hasStretcher: driver?.hasStretcher || false,
+        profileImageUrl: driver?.profileImageUrl || "",
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [driver]);
 
   const handleChange = (e) => {
@@ -55,8 +58,6 @@ const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
       setSaving(false);
     }
   };
-
-  const inputClass = `h-11 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none focus:border-[#C8102E]`;
 
   return (
     <section className={`rounded-lg border ${theme.border} ${theme.panel} p-6 shadow-[0_14px_34px_rgba(10,22,40,0.06)]`}>

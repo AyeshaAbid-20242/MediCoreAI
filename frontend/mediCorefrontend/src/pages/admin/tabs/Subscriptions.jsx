@@ -3,7 +3,6 @@ import { useState } from "react";
 
 const Subscriptions = ({ subscriptions, onUpdate, theme }) => {
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
-  const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
   const inputClass = `h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm font-medium ${theme.text} focus:outline-none focus:border-[#C8102E]`;
 
   const [modal, setModal] = useState(null);

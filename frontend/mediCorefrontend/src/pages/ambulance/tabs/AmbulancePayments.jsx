@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 
 const money = (amount = 0) => `Rs. ${Number(amount).toLocaleString()}`;
 
-const AmbulancePayments = ({ driver, theme }) => {
+const AmbulancePayments = ({ theme }) => {
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
   const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
 

@@ -1,18 +1,6 @@
-export const navItems = [
-  ["overview", "Dashboard"],
-  ["pending", "Pending Approvals"],
-  ["users", "All Users"],
-  ["doctors", "Doctors"],
-  ["patients", "Patients"],
-  ["ambulance", "Ambulance"],
-  ["subscriptions", "Subscriptions"],
-  ["appointments", "Appointments"],
-  ["payments", "Payments"],
-  ["analytics", "Analytics"],
-  ["reviews", "Reviews"],
-  ["messages", "Messages"],
-  ["settings", "Settings"],
-];
+import { adminNavItems } from "../sidebarNav";
+
+const navItems = adminNavItems;
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout, pendingCount }) => {
   const mainItems = navItems.slice(0, 6);

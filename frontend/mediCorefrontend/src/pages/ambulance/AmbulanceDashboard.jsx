@@ -56,7 +56,12 @@ const AmbulanceDashboard = () => {
     }
   }, []);
 
-  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  useEffect(() => {
+    const init = async () => {
+      await loadDashboard();
+    };
+    void init();
+  }, [loadDashboard]);
 
   const updateDriver = (driver) => {
     const savedUser = JSON.parse(localStorage.getItem("user") || "{}");

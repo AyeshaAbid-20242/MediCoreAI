@@ -18,6 +18,8 @@ const ForgotPassword = () => {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const inputClass = `w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:border-red-500 transition-colors duration-300
     ${darkMode ? "bg-[#0f1623] text-white border-gray-700" : "bg-gray-100 text-gray-800 border-gray-300"}`;
@@ -208,22 +210,24 @@ const ForgotPassword = () => {
             <>
               <div>
                 <label className="text-gray-400 text-sm mb-1 block">New Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter new password"
-                  className={inputClass}
+                  inputClass={inputClass}
+                  show={showNewPassword}
+                  setShow={setShowNewPassword}
                 />
               </div>
               <div>
                 <label className="text-gray-400 text-sm mb-1 block">Confirm Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm new password"
-                  className={inputClass}
+                  inputClass={inputClass}
+                  show={showConfirmPassword}
+                  setShow={setShowConfirmPassword}
                 />
               </div>
               <button
@@ -252,5 +256,27 @@ const ForgotPassword = () => {
     </div>
   );
 };
+
+const PasswordInput = ({ inputClass, show, setShow, ...props }) => (
+  <div className="relative">
+    <input {...props} type={show ? "text" : "password"} className={`${inputClass} pr-12`} />
+    <button
+      type="button"
+      onClick={() => setShow(!show)}
+      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:text-red-400"
+      aria-label={show ? "Hide password" : "Show password"}
+    >
+      <EyeIcon crossed={show} />
+    </button>
+  </div>
+);
+
+const EyeIcon = ({ crossed }) => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+    {crossed && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4l16 16" />}
+  </svg>
+);
 
 export default ForgotPassword;

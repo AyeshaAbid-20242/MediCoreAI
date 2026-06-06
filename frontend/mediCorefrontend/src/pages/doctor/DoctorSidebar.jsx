@@ -1,11 +1,6 @@
-const navItems = [
-  ["overview", "Overview"],
-  ["profile", "Profile"],
-  ["appointments", "Appointments"],
-  ["payments", "Payments"],
-  ["reviews", "Reviews"],
-  ["subscription", "Subscription"],
-];
+import { doctorNavItems } from "../sidebarNav";
+
+const navItems = doctorNavItems;
 
 const DoctorSidebar = ({ activeTab, setActiveTab, onLogout, doctor }) => (
   <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-[#1E2D45] bg-[#0A1628] lg:flex">
@@ -60,5 +55,4 @@ const DoctorSidebar = ({ activeTab, setActiveTab, onLogout, doctor }) => (
   </aside>
 );
 
-export { navItems };
 export default DoctorSidebar;

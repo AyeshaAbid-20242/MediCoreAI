@@ -2,7 +2,9 @@ import User from "../models/user.js";
 import { getAllowedAIModels, getSafeAIModel } from "../config/aiModels.js";
 import getOpenRouter from "../config/openRouter.js";
 import { sendValidationError, toNumber, trimString } from "../helper/validators.js";
+import { consumeUsage, formatUsage, getUsage } from "../services/aiUsageService.js";
 import { fetchNearbyCareFromOsm, getDistanceMeters } from "../services/nearbyCareService.js";
+import { getCareFocus } from "../services/symptomCareService.js";
 
 const activeStatuses = ["approved", "active"];
 const providerSelect = "-password -otp -otpExpiry";
@@ -55,6 +57,7 @@ const getAIModels = (req, res) => {
   res.status(200).json({
     message: "AI models fetched successfully",
     models: getAllowedAIModels(),
+    usage: formatUsage(getUsage(req.user._id.toString())),
   });
 };
 
@@ -67,11 +70,25 @@ const analyzeSymptoms = async (req, res) => {
       return sendValidationError(res, ["Please describe your symptoms."]);
     }
 
+    const patientId = req.user._id.toString();
+    const { allowed, usage } = consumeUsage(patientId);
+
+    if (!allowed) {
+      return res.status(429).json({
+        message: "AI usage limit reached. Please try again after the reset time.",
+        usage: formatUsage(usage),
+      });
+    }
+
+    const careFocus = getCareFocus(message);
+
     if (!process.env.OPENROUTER_API_KEY) {
       return res.status(200).json({
         message: "OpenRouter API key is not configured.",
         answer:
           "I can help prepare care notes once OPENROUTER_API_KEY is added. For now: if symptoms are severe, sudden, or include chest pain, trouble breathing, fainting, heavy bleeding, or confusion, seek emergency care immediately.",
+        careFocus,
+        usage: formatUsage(usage),
       });
     }
 
@@ -85,6 +102,8 @@ Give:
 2. Practical next steps.
 3. Red flags that need emergency care.
 4. Which type of doctor to consider.
+
+Suggested care focus from app rules: ${careFocus.specialty}.
 
 Do not diagnose. Keep it clear and short.
 `;
@@ -112,6 +131,8 @@ Do not diagnose. Keep it clear and short.
       provider: "openrouter",
       model,
       answer,
+      careFocus,
+      usage: formatUsage(usage),
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -145,16 +166,25 @@ const getNearbyCare = async (req, res) => {
       (provider) => provider.role === "ambulance_driver"
     );
 
-    const places = await fetchNearbyCareFromOsm({ lat: latitude, lng: longitude, radius });
-    const hospitals = places.filter((place) =>
-      ["hospital", "clinic", "emergency"].includes(place.type)
-    );
+    let places = [];
+    let hospitals = [];
+    let osmMessage = "Nearby care fetched successfully";
+
+    try {
+      places = await fetchNearbyCareFromOsm({ lat: latitude, lng: longitude, radius });
+      hospitals = places.filter((place) =>
+        ["hospital", "clinic", "emergency"].includes(place.type)
+      );
+    } catch (error) {
+      console.error("Nearby care OSM lookup failed:", error.message);
+      osmMessage = "Care location service is unavailable; platform providers are still available.";
+    }
 
     res.status(200).json({
       success: true,
       source: "openstreetmap_overpass",
       count: places.length,
-      message: "Nearby care fetched successfully",
+      message: osmMessage,
       places,
       hospitals,
       doctors,
@@ -165,6 +195,9 @@ const getNearbyCare = async (req, res) => {
       success: false,
       message: "Nearby care service is temporarily unavailable. Please try again shortly.",
       places: [],
+      hospitals: [],
+      doctors: [],
+      ambulanceDrivers: [],
     });
   }
 };

@@ -67,7 +67,10 @@ const DoctorDashboard = () => {
   }, []);
 
   useEffect(() => {
-    loadDashboard();
+    const init = async () => {
+      await loadDashboard();
+    };
+    void init();
   }, [loadDashboard]);
 
   const visibleDashboard = useMemo(() => {

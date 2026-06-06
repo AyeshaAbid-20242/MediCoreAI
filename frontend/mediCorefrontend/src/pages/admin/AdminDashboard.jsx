@@ -133,7 +133,12 @@ const AdminDashboard = () => {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const load = async () => {
+      await fetchData();
+    };
+    void load();
+  }, [fetchData]);
 
   useEffect(() => {
     if (activeTab === "users") {

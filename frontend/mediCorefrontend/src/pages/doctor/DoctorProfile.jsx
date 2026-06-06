@@ -23,19 +23,22 @@ const DoctorProfile = ({ doctor, onUpdated, theme }) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setForm({
-      name: doctor?.fullName || doctor?.name || "",
-      city: doctor?.city || "",
-      specialization: doctor?.specialization || "",
-      experience: doctor?.experience || "",
-      licenseNumber: doctor?.licenseNumber || "",
-      pmdcNumber: doctor?.pmdcNumber || "",
-      bio: doctor?.bio || "",
-      consultationFee: doctor?.consultationFee || "",
-      profileImageUrl: doctor?.profileImageUrl || "",
-      availableDays: (doctor?.availableDays || []).join(", "),
-      availableTimeSlots: (doctor?.availableTimeSlots || []).join(", "),
-    });
+    const timer = setTimeout(() => {
+      setForm({
+        name: doctor?.fullName || doctor?.name || "",
+        city: doctor?.city || "",
+        specialization: doctor?.specialization || "",
+        experience: doctor?.experience || "",
+        licenseNumber: doctor?.licenseNumber || "",
+        pmdcNumber: doctor?.pmdcNumber || "",
+        bio: doctor?.bio || "",
+        consultationFee: doctor?.consultationFee || "",
+        profileImageUrl: doctor?.profileImageUrl || "",
+        availableDays: (doctor?.availableDays || []).join(", "),
+        availableTimeSlots: (doctor?.availableTimeSlots || []).join(", "),
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [doctor]);
 
   const handleChange = (event) => {

@@ -42,7 +42,7 @@ const plans = [
 ];
 const money = (amount) => `$${Number(amount).toLocaleString()}`;
 
-const DoctorSubscription = ({ doctor, onUpdated, theme }) => {
+const DoctorSubscription = ({ doctor, theme }) => {
   const [selectedPlan, setSelectedPlan] = useState("Professional");
   const [duration, setDuration] = useState("monthly");
   const [loading, setLoading] = useState(false);

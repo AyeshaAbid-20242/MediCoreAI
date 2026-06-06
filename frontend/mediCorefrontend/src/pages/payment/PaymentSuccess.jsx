@@ -11,29 +11,32 @@ const PaymentSuccess = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   useEffect(() => {
-    const sessionId = searchParams.get("session_id");
-    if (!sessionId) {
-      setStatus("error");
-      setMessage("Invalid payment session");
-      return;
-    }
-    verifyPayment(sessionId)
-      .then((data) => {
+    const checkPayment = async () => {
+      const sessionId = searchParams.get("session_id");
+      if (!sessionId) {
+        setStatus("error");
+        setMessage("Invalid payment session");
+        return;
+      }
+
+      try {
+        const data = await verifyPayment(sessionId);
         setStatus("success");
         setMessage(data.message);
-        // Update local storage
         const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
         localStorage.setItem("user", JSON.stringify({
           ...savedUser,
           subscriptionStatus: data.subscription.status,
           packageName: data.subscription.packageName,
         }));
-      })
-      .catch((err) => {
+      } catch (err) {
         setStatus("error");
         setMessage(err.response?.data?.message || "Payment verification failed");
-      });
-  }, []);
+      }
+    };
+
+    void checkPayment();
+  }, [searchParams]);
 
   const handleContinue = () => {
     if (user.role === "doctor") navigate("/doctor/dashboard");

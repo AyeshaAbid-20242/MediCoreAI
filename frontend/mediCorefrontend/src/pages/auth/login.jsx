@@ -9,6 +9,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -133,15 +134,25 @@ const Login = () => {
                   Forgot password?
                 </button>
               </div>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                required
-                className={`h-11 w-full rounded-lg border ${border} ${panelMuted} px-3 text-sm font-medium ${text} outline-none focus:border-[#C8102E] transition-colors`}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  required
+                  className={`h-11 w-full rounded-lg border ${border} ${panelMuted} px-3 pr-11 text-sm font-medium ${text} outline-none transition-colors focus:border-[#C8102E]`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className={`absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md ${subtext} hover:text-[#C8102E]`}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  <EyeIcon crossed={showPassword} />
+                </button>
+              </div>
             </div>
 
             {/* Submit */}
@@ -173,5 +184,13 @@ const Login = () => {
     </div>
   );
 };
+
+const EyeIcon = ({ crossed }) => (
+  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+    {crossed && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4l16 16" />}
+  </svg>
+);
 
 export default Login;
