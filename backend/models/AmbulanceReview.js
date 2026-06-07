@@ -1,27 +1,22 @@
 import mongoose from "mongoose";
 
-const reviewSchema = new mongoose.Schema(
+const ambulanceReviewSchema = new mongoose.Schema(
   {
     patientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    doctorId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-    },
-    appointmentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Appointment",
+      required: true,
     },
     ambulanceJobId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "AmbulanceJob",
+      required: true,
+      unique: true,
     },
     rating: {
       type: Number,
@@ -39,11 +34,8 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-reviewSchema.index({ appointmentId: 1 }, { unique: true, sparse: true });
-reviewSchema.index({ ambulanceJobId: 1 }, { unique: true, sparse: true });
-reviewSchema.index({ doctorId: 1, createdAt: -1 });
-reviewSchema.index({ driverId: 1, createdAt: -1 });
+ambulanceReviewSchema.index({ driverId: 1, createdAt: -1 });
 
-const Review = mongoose.model("Review", reviewSchema);
+const AmbulanceReview = mongoose.model("AmbulanceReview", ambulanceReviewSchema);
 
-export default Review;
+export default AmbulanceReview;

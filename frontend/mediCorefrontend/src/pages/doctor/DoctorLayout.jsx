@@ -1,6 +1,7 @@
 import { useState } from "react";
 import DoctorSidebar from "./DoctorSidebar";
 import { doctorNavItems } from "../sidebarNav";
+import ThemeToggle from "../../components/ThemeToggle";
 
 const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, theme, children }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,13 +77,7 @@ const DoctorLayout = ({ doctor, activeTab, setActiveTab, darkMode, setDarkMode, 
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg font-black ${theme.text}`}
-                  aria-label="Toggle dark mode"
-                >
-                  {darkMode ? "☀" : "◐"}
-                </button>
+                <ThemeToggle darkMode={darkMode} onToggle={() => setDarkMode(!darkMode)} theme={theme} />
                 <div className="rounded-lg bg-[#C8102E] px-3 py-2 text-xs font-black text-white">
                   {(doctor?.status || "pending").toUpperCase()}
                 </div>

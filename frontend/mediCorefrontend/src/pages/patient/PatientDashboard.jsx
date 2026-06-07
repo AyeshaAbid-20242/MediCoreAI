@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import * as THREE from "three";
 import NearbyCareMap from "../../components/NearbyCareMap";
+import ThemeToggle from "../../components/ThemeToggle";
 import {
   Area,
   AreaChart,
@@ -17,11 +18,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { payAppointment, requestAppointment } from "../../api/appointmentApi";
-import { requestAmbulance } from "../../api/ambulanceApi";
+import { getDoctorAvailability, getPatientAppointments, requestAppointment } from "../../api/appointmentApi";
+import { getPatientAmbulanceRequests, requestAmbulance } from "../../api/ambulanceApi";
 import { getPatientProviders } from "../../api/authApi";
 import { getApiError } from "../../api/axios";
+import { createAppointmentCheckout } from "../../api/paymentApi";
 import { analyzeSymptoms, getAiModels, getNearbyCare, getPatientHealthSummary } from "../../api/patientApi";
+import { createAmbulanceReview, createReview } from "../../api/reviewApi";
 
 const LIGHT = {
   bg: "bg-[#EEF3F6]",
@@ -55,6 +58,7 @@ const Icon = ({ name, size = 17, className = "" }) => {
     ambulance: "M3 17h2a2 2 0 0 0 4 0h6a2 2 0 0 0 4 0h2v-5l-3-4h-4V5H3v12Zm11-5h5M6 8h4m-2-2v4",
     file: "M6 3h8l4 4v14H6V3Zm8 0v5h5M9 12h6M9 16h6",
     card: "M3 6h18v12H3V6Zm0 4h18M7 15h3",
+    calendar: "M7 3v3m10-3v3M4 8h20M5 5h18v17H5V5Zm4 7h3m3 0h3M9 16h3m3 0h3",
     settings: "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-12v3m0 11v3M4.2 6.2l2.1 2.1m11.4 7.4 2.1 2.1M2 12h3m14 0h3M4.2 17.8l2.1-2.1m11.4-7.4 2.1-2.1",
     search: "M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm5.5-2 5 5",
     mic: "M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm-7-3a7 7 0 0 0 14 0M12 18v4",
@@ -113,6 +117,37 @@ const formatDistance = (item) => {
   return "Distance unavailable";
 };
 
+const getAppointmentStart = (appointment) => {
+  if (!appointment?.appointmentDate || !appointment?.appointmentTime) return null;
+  const datePart = new Date(appointment.appointmentDate).toISOString().slice(0, 10);
+  const start = new Date(`${datePart}T${appointment.appointmentTime}:00`);
+
+  return Number.isNaN(start.getTime()) ? null : start;
+};
+
+const canJoinAppointment = (appointment) => {
+  const start = getAppointmentStart(appointment);
+  if (!start) return false;
+
+  const now = Date.now();
+  const opensAt = start.getTime() - 10 * 60 * 1000;
+  const closesAt = start.getTime() + 60 * 60 * 1000;
+
+  return now >= opensAt && now <= closesAt;
+};
+
+const getJoinHelpText = (appointment) => {
+  const start = getAppointmentStart(appointment);
+  if (!start) return "Meeting time is not set.";
+  const opensAt = new Date(start.getTime() - 10 * 60 * 1000);
+
+  if (Date.now() < opensAt.getTime()) {
+    return `Join opens at ${opensAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
+  }
+
+  return "Meeting window has ended.";
+};
+
 const getOsmUrl = (item) => {
   if (!Number.isFinite(item?.lat) || !Number.isFinite(item?.lng)) return null;
   return `https://www.openstreetmap.org/?mlat=${item.lat}&mlon=${item.lng}#map=16/${item.lat}/${item.lng}`;
@@ -123,57 +158,57 @@ const matchesWords = (text = "", words = []) => {
   return words.some((word) => normalized.includes(word.toLowerCase()));
 };
 
-const weeklyVitals = [
-  { day: "Mon", heart: 72, oxygen: 98, temp: 36.7 },
-  { day: "Tue", heart: 75, oxygen: 97, temp: 36.8 },
-  { day: "Wed", heart: 70, oxygen: 98, temp: 36.6 },
-  { day: "Thu", heart: 76, oxygen: 96, temp: 37.2 },
-  { day: "Fri", heart: 73, oxygen: 98, temp: 36.9 },
-  { day: "Sat", heart: 71, oxygen: 99, temp: 36.8 },
-  { day: "Sun", heart: 72, oxygen: 98, temp: 36.8 },
-];
+// const weeklyVitals = [
+//   { day: "Mon", heart: 72, oxygen: 98, temp: 36.7 },
+//   { day: "Tue", heart: 75, oxygen: 97, temp: 36.8 },
+//   { day: "Wed", heart: 70, oxygen: 98, temp: 36.6 },
+//   { day: "Thu", heart: 76, oxygen: 96, temp: 37.2 },
+//   { day: "Fri", heart: 73, oxygen: 98, temp: 36.9 },
+//   { day: "Sat", heart: 71, oxygen: 99, temp: 36.8 },
+//   { day: "Sun", heart: 72, oxygen: 98, temp: 36.8 },
+// ];
 
-const recoveryTrend = [
-  { month: "Jan", symptoms: 18, visits: 3 },
-  { month: "Feb", symptoms: 15, visits: 2 },
-  { month: "Mar", symptoms: 12, visits: 3 },
-  { month: "Apr", symptoms: 9, visits: 1 },
-  { month: "May", symptoms: 7, visits: 2 },
-  { month: "Jun", symptoms: 5, visits: 1 },
-];
+// const recoveryTrend = [
+//   { month: "Jan", symptoms: 18, visits: 3 },
+//   { month: "Feb", symptoms: 15, visits: 2 },
+//   { month: "Mar", symptoms: 12, visits: 3 },
+//   { month: "Apr", symptoms: 9, visits: 1 },
+//   { month: "May", symptoms: 7, visits: 2 },
+//   { month: "Jun", symptoms: 5, visits: 1 },
+// ];
 
-const departmentMix = [
-  { name: "General", value: 36, color: "#0891B2", dot: "bg-[#0891B2]" },
-  { name: "Cardio", value: 24, color: "#C8102E", dot: "bg-[#C8102E]" },
-  { name: "Lab", value: 22, color: "#059669", dot: "bg-[#059669]" },
-  { name: "Other", value: 18, color: "#F59E0B", dot: "bg-[#F59E0B]" },
-];
+// const departmentMix = [
+//   { name: "General", value: 36, color: "#0891B2", dot: "bg-[#0891B2]" },
+//   { name: "Cardio", value: 24, color: "#C8102E", dot: "bg-[#C8102E]" },
+//   { name: "Lab", value: 22, color: "#059669", dot: "bg-[#059669]" },
+//   { name: "Other", value: 18, color: "#F59E0B", dot: "bg-[#F59E0B]" },
+// ];
 
-const records = [
-  { title: "Cardiology consultation", date: "May 18, 2026", doctor: "Dr. Sarah Chen", status: "Completed" },
-  { title: "CBC blood test", date: "May 12, 2026", doctor: "MediCare Lab", status: "Reviewed" },
-  { title: "Fever and cough follow-up", date: "April 30, 2026", doctor: "Dr. Ahmed Raza", status: "Completed" },
-];
+// const records = [
+//   { title: "Cardiology consultation", date: "May 18, 2026", doctor: "Dr. Sarah Chen", status: "Completed" },
+//   { title: "CBC blood test", date: "May 12, 2026", doctor: "MediCare Lab", status: "Reviewed" },
+//   { title: "Fever and cough follow-up", date: "April 30, 2026", doctor: "Dr. Ahmed Raza", status: "Completed" },
+// ];
 
-const prescriptions = [
-  { medicine: "Paracetamol 500mg", schedule: "After meal, twice daily", days: "3 days" },
-  { medicine: "Vitamin D3", schedule: "Once weekly", days: "4 weeks" },
-  { medicine: "ORS Sachet", schedule: "As needed with fluids", days: "2 days" },
-];
+// const prescriptions = [
+//   { medicine: "Paracetamol 500mg", schedule: "After meal, twice daily", days: "3 days" },
+//   { medicine: "Vitamin D3", schedule: "Once weekly", days: "4 weeks" },
+//   { medicine: "ORS Sachet", schedule: "As needed with fluids", days: "2 days" },
+// ];
 
-const vitals = [
-  { label: "Heart Rate", value: "72 bpm", tone: "text-[#C8102E]" },
-  { label: "Blood Pressure", value: "118/76", tone: "text-[#0891B2]" },
-  { label: "O2 Saturation", value: "98%", tone: "text-[#059669]" },
-  { label: "Temperature", value: "36.8 C", tone: "text-[#F59E0B]" },
-];
+// const vitals = [
+//   { label: "Heart Rate", value: "72 bpm", tone: "text-[#C8102E]" },
+//   { label: "Blood Pressure", value: "118/76", tone: "text-[#0891B2]" },
+//   { label: "O2 Saturation", value: "98%", tone: "text-[#059669]" },
+//   { label: "Temperature", value: "36.8 C", tone: "text-[#F59E0B]" },
+// ];
 
-const statCards = [
-  ["Care Score", "86", "+4.8%", "heart", "bg-[#C8102E]/10 text-[#C8102E]"],
-  ["Appointments", "12", "2 upcoming", "doctor", "bg-[#0891B2]/10 text-[#0891B2]"],
-  ["Reports", "28", "5 reviewed", "file", "bg-[#059669]/10 text-[#059669]"],
-  ["Emergency ETA", "5m", "nearest unit", "ambulance", "bg-[#F59E0B]/10 text-[#F59E0B]"],
-];
+// const statCards = [
+//   ["Care Score", "86", "+4.8%", "heart", "bg-[#C8102E]/10 text-[#C8102E]"],
+//   ["Appointments", "12", "2 upcoming", "doctor", "bg-[#0891B2]/10 text-[#0891B2]"],
+//   ["Reports", "28", "5 reviewed", "file", "bg-[#059669]/10 text-[#059669]"],
+//   ["Emergency ETA", "5m", "nearest unit", "ambulance", "bg-[#F59E0B]/10 text-[#F59E0B]"],
+// ];
 
 const chartTooltip = (theme) => ({
   contentStyle: {
@@ -288,7 +323,7 @@ const VitalsScene = ({ darkMode }) => {
 };
 
 const PatientDashboard = () => {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("medicore-theme") !== "light");
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [selectedSpec, setSelectedSpec] = useState("All");
   const [symptomText, setSymptomText] = useState("");
@@ -317,11 +352,22 @@ const PatientDashboard = () => {
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingError, setBookingError] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [slotLoading, setSlotLoading] = useState(false);
+  const [slotAvailability, setSlotAvailability] = useState({ allTimeSlots: [], bookedTimes: [], availableTimeSlots: [], availableDay: true });
+  const [patientAppointments, setPatientAppointments] = useState([]);
+  const [paymentActionError, setPaymentActionError] = useState("");
+  const [paymentLoadingId, setPaymentLoadingId] = useState("");
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
   const [ambulanceRequest, setAmbulanceRequest] = useState(null);
   const [ambulanceForm, setAmbulanceForm] = useState({ pickupLocation: "", contactNumber: "", notes: "" });
   const [ambulanceMessage, setAmbulanceMessage] = useState("");
   const [ambulanceError, setAmbulanceError] = useState("");
   const [ambulanceLoading, setAmbulanceLoading] = useState(false);
+  const [ambulanceJobs, setAmbulanceJobs] = useState([]);
   const [healthSummary, setHealthSummary] = useState({
     latestVital: null,
     vitalsTrend: [],
@@ -341,6 +387,28 @@ const PatientDashboard = () => {
       ),
     []
   );
+
+  useEffect(() => {
+    localStorage.setItem("medicore-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  const loadAmbulanceJobs = useCallback(async () => {
+    try {
+      const response = await getPatientAmbulanceRequests();
+      setAmbulanceJobs(response.data.jobs || []);
+    } catch {
+      setAmbulanceJobs([]);
+    }
+  }, []);
+
+  const loadPatientAppointments = useCallback(async () => {
+    try {
+      const response = await getPatientAppointments();
+      setPatientAppointments(response.data.appointments || []);
+    } catch {
+      setPatientAppointments([]);
+    }
+  }, []);
 
   useEffect(() => {
     const loadNearbyCare = async (coords = defaultLocation) => {
@@ -387,6 +455,47 @@ const PatientDashboard = () => {
       { enableHighAccuracy: true, timeout: 7000 }
     );
   }, []);
+
+  useEffect(() => {
+    loadAmbulanceJobs();
+    const intervalId = window.setInterval(loadAmbulanceJobs, 8000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadAmbulanceJobs]);
+
+  useEffect(() => {
+    loadPatientAppointments();
+    const intervalId = window.setInterval(loadPatientAppointments, 12000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadPatientAppointments]);
+
+  useEffect(() => {
+    const loadSlots = async () => {
+      if (!bookingDoctor?._id || !bookingForm.appointmentDate || pendingAppointment) {
+        setSlotAvailability({ allTimeSlots: [], bookedTimes: [], availableTimeSlots: [], availableDay: true });
+        return;
+      }
+
+      setSlotLoading(true);
+      try {
+        const response = await getDoctorAvailability(bookingDoctor._id, bookingForm.appointmentDate);
+        setSlotAvailability({
+          allTimeSlots: response.data.allTimeSlots || [],
+          bookedTimes: response.data.bookedTimes || [],
+          availableTimeSlots: response.data.availableTimeSlots || [],
+          availableDay: response.data.availableDay !== false,
+        });
+      } catch (error) {
+        setSlotAvailability({ allTimeSlots: [], bookedTimes: [], availableTimeSlots: [], availableDay: true });
+        setBookingError(getApiError(error, "Could not load available time slots."));
+      } finally {
+        setSlotLoading(false);
+      }
+    };
+
+    loadSlots();
+  }, [bookingDoctor, bookingForm.appointmentDate, pendingAppointment]);
 
   useEffect(() => {
     const loadAiModels = async () => {
@@ -487,9 +596,11 @@ const PatientDashboard = () => {
   const prescriptions = healthSummary.prescriptions.map((item) => ({
     id: item._id,
     medicine: item.medicine,
+    dosage: item.dosage,
     schedule: item.schedule,
     days: item.duration || item.status,
     instructions: item.instructions,
+    doctor: item.doctorId?.fullName || item.doctorId?.name || "Doctor",
   }));
   const departmentMix = healthSummary.departmentMix.map((item, index) => ({
     ...item,
@@ -519,10 +630,45 @@ const PatientDashboard = () => {
   ];
   const statCards = [
     ["Care Score", latestVital ? "Active" : "New", healthLoading ? "loading records" : `${weeklyVitals.length} vitals`, "heart", "bg-[#C8102E]/10 text-[#C8102E]"],
-    ["Appointments", "Live", "from appointment API", "doctor", "bg-[#0891B2]/10 text-[#0891B2]"],
+    ["Appointments", patientAppointments.length, `${patientAppointments.filter((item) => item.paymentStatus === "paid").length} paid`, "doctor", "bg-[#0891B2]/10 text-[#0891B2]"],
     ["Reports", records.length, `${records.filter((record) => record.status === "reviewed").length} reviewed`, "file", "bg-[#059669]/10 text-[#059669]"],
     ["Emergency ETA", nearbyDrivers.length ? "Ready" : "N/A", `${nearbyDrivers.length} drivers`, "ambulance", "bg-[#F59E0B]/10 text-[#F59E0B]"],
   ];
+  const nextAppointment = patientAppointments
+    .filter((appointment) => ["requested", "accepted"].includes(appointment.appointmentStatus))
+    .slice()
+    .sort((a, b) => {
+      const first = getAppointmentStart(a)?.getTime() || 0;
+      const second = getAppointmentStart(b)?.getTime() || 0;
+      return first - second;
+    })[0];
+  const latestPrescription = prescriptions[0];
+  const latestRecord = records[0];
+  const activeAmbulanceJob = ambulanceJobs.find((job) =>
+    ["requested", "accepted", "active"].includes(job.status)
+  );
+  const activeAmbulanceDriver = activeAmbulanceJob?.driverId;
+  const trackingLatitude = Number.isFinite(activeAmbulanceJob?.driverLatitude)
+    ? activeAmbulanceJob.driverLatitude
+    : activeAmbulanceDriver?.latitude;
+  const trackingLongitude = Number.isFinite(activeAmbulanceJob?.driverLongitude)
+    ? activeAmbulanceJob.driverLongitude
+    : activeAmbulanceDriver?.longitude;
+  const driverTrackingPlace =
+    activeAmbulanceJob &&
+    ["accepted", "active"].includes(activeAmbulanceJob.status) &&
+    Number.isFinite(trackingLatitude) &&
+    Number.isFinite(trackingLongitude)
+      ? {
+          id: `driver-${activeAmbulanceDriver._id}`,
+          name: activeAmbulanceDriver.fullName || activeAmbulanceDriver.name || "Ambulance driver",
+          category: activeAmbulanceJob.status === "active" ? "Live ambulance location" : "Driver accepted",
+          lat: trackingLatitude,
+          lng: trackingLongitude,
+          phone: activeAmbulanceDriver.mobileNumber || "",
+          distanceMeters: null,
+        }
+      : null;
 
   const cardClass = `rounded-lg border ${theme.border} ${theme.panel} shadow-[0_14px_34px_rgba(10,22,40,0.06)]`;
   const softClass = `rounded-lg border ${theme.border} ${theme.panelMuted}`;
@@ -584,11 +730,31 @@ const PatientDashboard = () => {
   };
 
   const openBooking = (doctor) => {
+    const existingAppointment = patientAppointments.find(
+      (appointment) =>
+        appointment.doctorId?._id === doctor._id &&
+        ["requested", "accepted"].includes(appointment.appointmentStatus) &&
+        ["pending", "paid"].includes(appointment.paymentStatus)
+    );
+
     setBookingDoctor(doctor);
-    setPendingAppointment(null);
-    setBookingMessage("");
+    setPendingAppointment(existingAppointment || null);
+    setBookingMessage(
+      existingAppointment
+        ? existingAppointment.paymentStatus === "paid"
+          ? "You already have a paid open appointment with this doctor."
+          : "You already requested this doctor. Please complete Stripe payment."
+        : ""
+    );
     setBookingError("");
-    setBookingForm({ appointmentDate: "", appointmentTime: "", patientNotes: "" });
+    setSlotAvailability({ allTimeSlots: [], bookedTimes: [], availableTimeSlots: [], availableDay: true });
+    setBookingForm({
+      appointmentDate: existingAppointment?.appointmentDate
+        ? new Date(existingAppointment.appointmentDate).toISOString().slice(0, 10)
+        : "",
+      appointmentTime: existingAppointment?.appointmentTime || "",
+      patientNotes: existingAppointment?.patientNotes || "",
+    });
   };
 
   const closeBooking = () => {
@@ -596,6 +762,7 @@ const PatientDashboard = () => {
     setPendingAppointment(null);
     setBookingMessage("");
     setBookingError("");
+    setSlotAvailability({ allTimeSlots: [], bookedTimes: [], availableTimeSlots: [], availableDay: true });
   };
 
   const handleAppointmentRequest = async (event) => {
@@ -612,7 +779,15 @@ const PatientDashboard = () => {
         ...bookingForm,
       });
       setPendingAppointment(res.data.appointment);
-      setBookingMessage("Appointment requested. Please complete placeholder payment.");
+      setPatientAppointments((items) => [
+        res.data.appointment,
+        ...items.filter((item) => item._id !== res.data.appointment?._id),
+      ]);
+      setBookingMessage(
+        res.data.alreadyExists
+          ? res.data.message
+          : "Appointment requested. Please complete Stripe payment."
+      );
     } catch (error) {
       setBookingError(getApiError(error, "Could not request appointment"));
     } finally {
@@ -620,18 +795,73 @@ const PatientDashboard = () => {
     }
   };
 
- const handleAppointmentPayment = async () => {
-  if (!pendingAppointment?._id) return;
+ const handleAppointmentPayment = async (appointment = pendingAppointment) => {
+  if (!appointment?._id) return;
   setBookingLoading(true);
+  setPaymentLoadingId(appointment._id);
   setBookingError("");
+  setPaymentActionError("");
   try {
-    const res = await createAppointmentCheckout(pendingAppointment._id);
+    const res = await createAppointmentCheckout(appointment._id);
+    if (!res?.url) {
+      throw new Error("Stripe checkout URL was not returned by the server.");
+    }
     window.location.href = res.url;
   } catch (error) {
-    setBookingError(getApiError(error, "Could not initiate payment"));
+    const message = getApiError(error, "Could not initiate payment");
+    setBookingError(message);
+    setPaymentActionError(message);
     setBookingLoading(false);
+    setPaymentLoadingId("");
   }
 };
+
+  const openReview = (targetType, item) => {
+    setReviewTarget({ type: targetType, item });
+    setReviewForm({ rating: 5, comment: "" });
+    setReviewError("");
+    setReviewMessage("");
+  };
+
+  const closeReview = () => {
+    setReviewTarget(null);
+    setReviewError("");
+    setReviewMessage("");
+  };
+
+  const handleReviewSubmit = async (event) => {
+    event.preventDefault();
+    if (!reviewTarget?.item?._id) return;
+
+    setReviewLoading(true);
+    setReviewError("");
+    setReviewMessage("");
+
+    try {
+      if (reviewTarget.type === "doctor") {
+        await createReview({
+          appointmentId: reviewTarget.item._id,
+          rating: reviewForm.rating,
+          comment: reviewForm.comment,
+        });
+        await loadPatientAppointments();
+      } else {
+        await createAmbulanceReview({
+          ambulanceJobId: reviewTarget.item._id,
+          rating: reviewForm.rating,
+          comment: reviewForm.comment,
+        });
+        await loadAmbulanceJobs();
+      }
+
+      setReviewMessage("Review submitted successfully.");
+      window.setTimeout(closeReview, 900);
+    } catch (error) {
+      setReviewError(getApiError(error, "Could not submit review."));
+    } finally {
+      setReviewLoading(false);
+    }
+  };
 
   const openAmbulanceRequest = (driver) => {
     setAmbulanceRequest(driver);
@@ -654,15 +884,19 @@ const PatientDashboard = () => {
     setAmbulanceMessage("");
     setAmbulanceError("");
     try {
-      await requestAmbulance({
+      const response = await requestAmbulance({
         driverId: ambulanceRequest._id,
         patientName: user.fullName || user.name || "Patient",
         contactNumber: ambulanceForm.contactNumber,
         pickupLocation: ambulanceForm.pickupLocation,
+        pickupLatitude: userLocation?.lat,
+        pickupLongitude: userLocation?.lng,
         destination: "Nearest hospital",
         notes: ambulanceForm.notes || "Emergency ambulance request from patient dashboard.",
       });
+      setAmbulanceJobs((jobs) => [response.data.job, ...jobs.filter((job) => job._id !== response.data.job?._id)]);
       setAmbulanceMessage("Ambulance request sent to driver.");
+      loadAmbulanceJobs();
     } catch (error) {
       setAmbulanceError(getApiError(error, "Could not request ambulance"));
     } finally {
@@ -675,6 +909,7 @@ const PatientDashboard = () => {
     ["AI Chat", "brain"],
     ["Doctors", "doctor"],
     ["Emergency", "ambulance"],
+    ["Appointments", "calendar"],
     ["Hospitals", "hospital"],
     ["Records", "file"],
     ["Payments", "card"],
@@ -793,7 +1028,7 @@ const PatientDashboard = () => {
               <div className="flex min-w-0 items-center gap-3">
                 <button
                   onClick={() => setMobileNavOpen(true)}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text} lg:hidden`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text} lg:hidden`}
                   aria-label="Open menu"
                 >
                   <Icon name="menu" size={16} />
@@ -809,24 +1044,22 @@ const PatientDashboard = () => {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                <div className={`hidden h-9 items-center gap-2 rounded-lg border ${theme.border} ${theme.panelMuted} px-3 md:flex`}>
+                <div className={`hidden h-10 items-center gap-2 rounded-lg border ${theme.border} ${theme.panelMuted} px-3 md:flex`}>
                   <Icon name="search" className={theme.subtext} size={15} />
                   <input
                     className={`w-64 bg-transparent text-sm outline-none ${theme.text} placeholder:text-slate-400`}
                     placeholder="Search records, doctors, hospitals"
                   />
                 </div>
-                <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-9 w-9 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text}`}
-                  aria-label="Toggle theme"
-                >
-                  <Icon name={darkMode ? "sun" : "moon"} size={16} />
-                </button>
-                <button className={`flex h-9 w-9 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text}`}>
+                <ThemeToggle
+                  darkMode={darkMode}
+                  onToggle={() => setDarkMode(!darkMode)}
+                  theme={theme}
+                />
+                <button className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} ${theme.text}`}>
                   <Icon name="bell" size={16} />
                 </button>
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8102E] text-xs font-black text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8102E] text-xs font-black text-white">
                   {(user.fullName || user.name || "PT").slice(0, 2).toUpperCase()}
                 </div>
               </div>
@@ -961,6 +1194,9 @@ const PatientDashboard = () => {
                 doctors={nearbyDoctors}
                 hospitals={visibleHospitals}
                 drivers={nearbyDrivers}
+                activeAmbulanceJob={activeAmbulanceJob}
+                driverTrackingPlace={driverTrackingPlace}
+                userLocation={userLocation}
                 onRequestAmbulance={openAmbulanceRequest}
                 theme={theme}
               />
@@ -1078,6 +1314,29 @@ const PatientDashboard = () => {
               </section>
             )}
 
+            {activeNav === "Appointments" && (
+              <section className={`${cardClass} p-4`}>
+                <PanelTitle title="My Appointments" subtitle="Consultation status, payment, and meeting links" theme={theme} />
+                <div className="mt-4 space-y-3">
+                  {patientAppointments.map((appointment) => (
+                    <AppointmentPaymentCard
+                      key={appointment._id}
+                      appointment={appointment}
+                      onPay={() => handleAppointmentPayment(appointment)}
+                      onReview={() => openReview("doctor", appointment)}
+                      loading={paymentLoadingId === appointment._id}
+                      theme={theme}
+                    />
+                  ))}
+                  {!patientAppointments.length && (
+                    <div className={`${softClass} p-6 text-sm font-bold ${theme.subtext}`}>
+                      Your consultation requests and meeting links will appear here.
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
             {activeNav === "Records" && (
               <section className={`${cardClass} p-4`}>
                 <PanelTitle title="History & Prescriptions" subtitle="Latest records and medication" theme={theme} />
@@ -1101,15 +1360,7 @@ const PatientDashboard = () => {
                 </div>
                 <div className={`mt-4 border-t ${theme.border} pt-4`}>
                   {prescriptions.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between py-2">
-                      <div>
-                        <p className={`text-sm font-black ${theme.text}`}>{item.medicine}</p>
-                        <p className={`text-xs ${theme.subtext}`}>{item.schedule}</p>
-                      </div>
-                      <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
-                        {item.days}
-                      </span>
-                    </div>
+                    <PrescriptionCard key={item.id} item={item} theme={theme} />
                   ))}
                   {!prescriptions.length && (
                     <p className={`py-3 text-sm font-semibold ${theme.subtext}`}>
@@ -1123,8 +1374,37 @@ const PatientDashboard = () => {
             {activeNav === "Payments" && (
               <section className={`${cardClass} p-4`}>
                 <PanelTitle title="Payments" subtitle="Appointment payment history" theme={theme} />
-                <div className={`${softClass} mt-4 p-6 text-sm font-bold ${theme.subtext}`}>
-                  Paid appointment records will appear here after you book and pay for a consultation.
+                {paymentActionError && (
+                  <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">
+                    {paymentActionError}
+                  </div>
+                )}
+                <div className="mt-4 space-y-3">
+                  {patientAppointments.map((appointment) => (
+                    <AppointmentPaymentCard
+                      key={appointment._id}
+                      appointment={appointment}
+                      onPay={() => handleAppointmentPayment(appointment)}
+                      onReview={() => openReview("doctor", appointment)}
+                      loading={paymentLoadingId === appointment._id}
+                      theme={theme}
+                    />
+                  ))}
+                  {ambulanceJobs
+                    .filter((job) => job.status === "completed")
+                    .map((job) => (
+                      <AmbulancePaymentCard
+                        key={job._id}
+                        job={job}
+                        onReview={() => openReview("ambulance", job)}
+                        theme={theme}
+                      />
+                    ))}
+                  {!patientAppointments.length && !ambulanceJobs.some((job) => job.status === "completed") && (
+                    <div className={`${softClass} p-6 text-sm font-bold ${theme.subtext}`}>
+                      Appointment and ambulance payment records will appear here after activity.
+                    </div>
+                  )}
                 </div>
               </section>
             )}
@@ -1211,116 +1491,32 @@ const PatientDashboard = () => {
                   </section>
                 </div>
 
-                <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-                  <section className={`${cardClass} p-4`}>
-                    <PanelTitle title="AI Health Chat" subtitle="Text or voice symptom support" theme={theme} />
-                    <div className={`mt-3 grid gap-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2 sm:grid-cols-[1fr_auto]`}>
-                      <div>
-                        <select
-                          value={selectedAiModel}
-                          onChange={(event) => setSelectedAiModel(event.target.value)}
-                          className={`h-9 w-full rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs font-bold ${theme.text} outline-none`}
-                        >
-                          {aiModels.map((model) => (
-                            <option key={model.id} value={model.id}>
-                              {model.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <AIUsageRing usage={aiUsage} theme={theme} />
-                    </div>
-                    <div className={`mt-3 h-[300px] space-y-3 overflow-y-auto rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
-                      {chatMessages.map((message, index) => (
-                        <div
-                          key={`${message.sender}-${index}`}
-                          className={`max-w-[95%] whitespace-pre-line rounded-lg px-3 py-2 text-sm leading-6 ${
-                            message.sender === "patient"
-                              ? "ml-auto bg-[#C8102E] text-white"
-                              : `${theme.panel} ${theme.text} border ${theme.border}`
-                          }`}
-                        >
-                          {message.model && (
-                            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] opacity-70">
-                              {message.model}
-                            </p>
-                          )}
-                          {message.text}
-                        </div>
-                      ))}
-                      {aiLoading && <p className={`text-xs font-bold ${theme.subtext}`}>AI is reviewing...</p>}
-                    </div>
-                    <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
-                      <textarea
-                        value={symptomText}
-                        onChange={(event) => setSymptomText(event.target.value)}
-                        className={`h-16 w-full resize-none bg-transparent px-1 text-sm outline-none ${theme.text} placeholder:text-slate-400`}
-                        placeholder="Describe symptoms or ask about your prescription..."
-                      />
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          onClick={handleVoiceInput}
-                          className={`flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-bold ${
-                            isListening ? "bg-[#C8102E] text-white" : `border ${theme.border} ${theme.text}`
-                          }`}
-                        >
-                          <Icon name="mic" size={14} /> {isListening ? "Listening" : "Voice"}
-                        </button>
-                        <button
-                          onClick={handleAIMessage}
-                          disabled={!symptomText.trim() || aiLoading}
-                          className="flex h-8 items-center gap-2 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E] disabled:opacity-50"
-                        >
-                          <Icon name="send" size={14} /> Send
-                        </button>
-                      </div>
-                    </div>
-                    <CareMatchPanel
-                      careFocus={careFocus}
-                      doctors={recommendedDoctors}
-                      hospitals={recommendedHospitals}
-                      drivers={nearbyDrivers}
-                      theme={theme}
-                      onBook={openBooking}
-                      onRequestAmbulance={openAmbulanceRequest}
-                      onShowRecommended={() => {
-                        setCareFilterMode("recommended");
-                        setActiveNav("Hospitals");
-                      }}
-                      onShowAll={() => {
-                        setCareFilterMode("all");
-                        setActiveNav("Hospitals");
-                      }}
-                    />
-                  </section>
+                <div className="grid items-start gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+                  <CareCommandCenter
+                    nextAppointment={nextAppointment}
+                    latestPrescription={latestPrescription}
+                    latestRecord={latestRecord}
+                    aiUsage={aiUsage}
+                    theme={theme}
+                    cardClass={cardClass}
+                    softClass={softClass}
+                    onOpenAi={() => setActiveNav("AI Chat")}
+                    onOpenDoctors={() => setActiveNav("Doctors")}
+                    onOpenEmergency={() => {
+                      setEmergencyMode(true);
+                      setActiveNav("Emergency");
+                    }}
+                  />
 
-                  <section className={`${cardClass} p-4`}>
-                    <PanelTitle title="Recovery Analytics" subtitle="Symptoms declining over time" theme={theme} />
-                    <div className="h-[322px]">
-                      {recoveryTrend.length ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={recoveryTrend} margin={{ top: 12, right: 8, left: -18, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="symptomsFill" x1="0" x2="0" y1="0" y2="1">
-                                <stop offset="5%" stopColor="#0891B2" stopOpacity={0.28} />
-                                <stop offset="95%" stopColor="#0891B2" stopOpacity={0.02} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid stroke={theme.line} strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <Tooltip {...chartTooltip(theme)} />
-                            <Area type="monotone" dataKey="symptoms" stroke="#0891B2" strokeWidth={2.4} fill="url(#symptomsFill)" />
-                            <Bar dataKey="visits" fill="#C8102E" radius={[4, 4, 0, 0]} barSize={16} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className={`flex h-full items-center justify-center rounded-lg border ${theme.border} ${theme.panelMuted} p-4 text-center text-sm font-semibold ${theme.subtext}`}>
-                          {healthLoading ? "Loading recovery records..." : "No medical records yet for recovery analytics."}
-                        </div>
-                      )}
-                    </div>
-                  </section>
+                  <WellnessOrbitPanel
+                    darkMode={darkMode}
+                    weeklyVitals={weeklyVitals}
+                    records={records}
+                    prescriptions={prescriptions}
+                    theme={theme}
+                    cardClass={cardClass}
+                    softClass={softClass}
+                  />
                 </div>
 
                 <section className={`${cardClass} overflow-hidden`}>
@@ -1350,6 +1546,9 @@ const PatientDashboard = () => {
                   doctors={nearbyDoctors}
                   hospitals={visibleHospitals}
                   drivers={nearbyDrivers}
+                  activeAmbulanceJob={activeAmbulanceJob}
+                  driverTrackingPlace={driverTrackingPlace}
+                  userLocation={userLocation}
                   onRequestAmbulance={openAmbulanceRequest}
                   theme={theme}
                 />
@@ -1441,15 +1640,7 @@ const PatientDashboard = () => {
                   </div>
                   <div className={`mt-3 border-t ${theme.border} pt-3`}>
                     {prescriptions.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between py-1.5">
-                        <div>
-                          <p className={`text-xs font-black ${theme.text}`}>{item.medicine}</p>
-                          <p className={`text-[11px] ${theme.subtext}`}>{item.schedule}</p>
-                        </div>
-                        <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
-                          {item.days}
-                        </span>
-                      </div>
+                      <PrescriptionCard key={item.id} item={item} theme={theme} compact />
                     ))}
                     {!prescriptions.length && (
                       <p className={`py-3 text-sm font-semibold ${theme.subtext}`}>
@@ -1469,6 +1660,8 @@ const PatientDashboard = () => {
           form={bookingForm}
           setForm={setBookingForm}
           pendingAppointment={pendingAppointment}
+          slotAvailability={slotAvailability}
+          slotLoading={slotLoading}
           message={bookingMessage}
           error={bookingError}
           loading={bookingLoading}
@@ -1491,6 +1684,19 @@ const PatientDashboard = () => {
           theme={theme}
         />
       )}
+      {reviewTarget && (
+        <ReviewModal
+          target={reviewTarget}
+          form={reviewForm}
+          setForm={setReviewForm}
+          message={reviewMessage}
+          error={reviewError}
+          loading={reviewLoading}
+          onSubmit={handleReviewSubmit}
+          onClose={closeReview}
+          theme={theme}
+        />
+      )}
     </div>
   );
 };
@@ -1508,6 +1714,124 @@ const MiniCount = ({ label, value, theme }) => (
     <p className={`text-[11px] font-semibold ${theme.subtext}`}>{label}</p>
   </div>
 );
+
+const CareCommandCenter = ({
+  nextAppointment,
+  latestPrescription,
+  latestRecord,
+  aiUsage,
+  theme,
+  cardClass,
+  softClass,
+  onOpenAi,
+  onOpenDoctors,
+  onOpenEmergency,
+}) => {
+  const appointmentTime = nextAppointment
+    ? `${new Date(nextAppointment.appointmentDate).toLocaleDateString()} at ${nextAppointment.appointmentTime}`
+    : "No active appointment";
+
+  return (
+    <section className={`${cardClass} overflow-hidden`}>
+      <div className="border-b border-[#C8102E]/20 bg-[#C8102E] px-4 py-4 text-white">
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-white/70">Care Command</p>
+        <h2 className="mt-1 text-lg font-black">Today&apos;s Care Snapshot</h2>
+      </div>
+      <div className="p-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className={`${softClass} p-3`}>
+            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-[#0891B2]/10 text-[#0891B2]">
+              <Icon name="calendar" size={16} />
+            </div>
+            <p className={`text-xs font-black uppercase tracking-wider ${theme.subtext}`}>Next Visit</p>
+            <p className={`mt-1 text-sm font-black ${theme.text}`}>
+              {nextAppointment?.doctorId?.fullName || nextAppointment?.doctorId?.name || "Appointment"}
+            </p>
+            <p className={`mt-1 text-xs leading-5 ${theme.subtext}`}>{appointmentTime}</p>
+          </div>
+          <div className={`${softClass} p-3`}>
+            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-[#059669]/10 text-[#059669]">
+              <Icon name="file" size={16} />
+            </div>
+            <p className={`text-xs font-black uppercase tracking-wider ${theme.subtext}`}>Medication</p>
+            <p className={`mt-1 text-sm font-black ${theme.text}`}>{latestPrescription?.medicine || "No active prescription"}</p>
+            <p className={`mt-1 text-xs leading-5 ${theme.subtext}`}>
+              {latestPrescription?.schedule || "Prescriptions from doctors appear here."}
+            </p>
+          </div>
+          <div className={`${softClass} p-3`}>
+            <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-[#F59E0B]/10 text-[#F59E0B]">
+              <Icon name="heart" size={16} />
+            </div>
+            <p className={`text-xs font-black uppercase tracking-wider ${theme.subtext}`}>Latest Record</p>
+            <p className={`mt-1 text-sm font-black ${theme.text}`}>{latestRecord?.title || "No record yet"}</p>
+            <p className={`mt-1 text-xs leading-5 ${theme.subtext}`}>
+              {latestRecord?.date || "Medical history will build as care continues."}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+          <div className={`${softClass} p-3`}>
+            <p className={`text-sm font-black ${theme.text}`}>AI support is available in its own workspace</p>
+            <p className={`mt-1 text-xs leading-5 ${theme.subtext}`}>
+              {aiUsage?.remaining ?? 0}/{aiUsage?.limit ?? 0} AI checks remaining. Open the AI Chat tab when you need symptom guidance.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 md:w-[270px]">
+            <button onClick={onOpenDoctors} className="h-10 rounded-lg bg-[#0A1628] px-3 text-xs font-black text-white transition hover:bg-[#C8102E]">
+              Doctors
+            </button>
+            <button onClick={onOpenAi} className={`h-10 rounded-lg border ${theme.border} px-3 text-xs font-black ${theme.text}`}>
+              AI Chat
+            </button>
+            <button onClick={onOpenEmergency} className="h-10 rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white transition hover:bg-[#a50d25]">
+              Emergency
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const WellnessOrbitPanel = ({ darkMode, weeklyVitals, records, prescriptions, theme, cardClass, softClass }) => {
+  const readiness = [
+    ["Vitals", weeklyVitals.length ? "Tracked" : "Pending"],
+    ["Records", records.length],
+    ["Meds", prescriptions.length],
+  ];
+
+  return (
+    <section className={`${cardClass} p-4`}>
+      <PanelTitle title="Wellness Orbit" subtitle="General health activity overview" theme={theme} />
+      <div className={`mt-3 overflow-hidden rounded-lg border ${theme.border} ${theme.panelMuted}`}>
+        <VitalsScene darkMode={darkMode} />
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {readiness.map(([label, value]) => (
+          <div key={label} className={`${softClass} p-2 text-center`}>
+            <p className={`text-sm font-black ${theme.text}`}>{value}</p>
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${theme.subtext}`}>{label}</p>
+          </div>
+        ))}
+      </div>
+      <div className={`mt-3 rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
+        <p className={`text-xs font-black uppercase tracking-wider ${theme.subtext}`}>Care rhythm</p>
+        <div className="mt-3 flex items-center gap-2">
+          {[weeklyVitals.length, records.length, prescriptions.length].map((value, index) => (
+            <div key={index} className="h-2 flex-1 overflow-hidden rounded-full bg-slate-500/20">
+              <div
+                className="h-full rounded-full bg-[#C8102E]"
+                style={{ width: `${Math.min(100, Math.max(18, value * 18))}%` }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const AIUsageRing = ({ usage, theme }) => {
   const used = usage?.used || 0;
@@ -1553,13 +1877,13 @@ const CareMatchPanel = ({
 
   return (
     <section className={`mt-4 rounded-lg border ${theme.border} ${theme.panelMuted} p-4`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
           <p className={`text-base font-black ${theme.text}`}>{careFocus.specialty} focus</p>
           <p className={`mt-1 text-sm font-semibold leading-6 ${theme.subtext}`}>{careFocus.note}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={onShowRecommended} className="h-9 rounded-lg bg-[#C8102E] px-4 text-xs font-black text-white">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+          <button onClick={onShowRecommended} className="h-9 rounded-lg bg-[#C8102E] px-4 text-xs font-black text-white transition hover:bg-[#a50d25]">
             Recommended
           </button>
           <button onClick={onShowAll} className={`h-9 rounded-lg border ${theme.border} px-4 text-xs font-black ${theme.text}`}>
@@ -1568,33 +1892,52 @@ const CareMatchPanel = ({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 xl:grid-cols-3">
-        <CareMiniList title="Platform Doctors" items={shownDoctors} empty="No matching platform doctor yet." theme={theme} onAction={onBook} actionLabel="Book" />
-        <CareMiniList title="Nearby Hospitals" items={shownHospitals} empty="No specialty-tagged hospital found, use all hospitals." theme={theme} />
-        <CareMiniList title="Ambulances" items={drivers.slice(0, 3)} empty="No ambulance drivers nearby." theme={theme} onAction={onRequestAmbulance} actionLabel="Request" />
+      <div className="mt-4 overflow-x-auto pb-2">
+        <div className="flex w-max items-start gap-3 min-[1180px]:grid min-[1180px]:w-full min-[1180px]:grid-cols-3">
+          <CareMiniList title="Platform Doctors" items={shownDoctors} empty="No matching platform doctor yet." theme={theme} onAction={onBook} actionLabel="Book" />
+          <CareMiniList title="Nearby Hospitals" items={shownHospitals} empty="No specialty-tagged hospital found, use all hospitals." theme={theme} />
+          <CareMiniList title="Ambulances" items={drivers.slice(0, 3)} empty="No ambulance drivers nearby." theme={theme} onAction={onRequestAmbulance} actionLabel="Request" />
+        </div>
       </div>
     </section>
   );
 };
 
 const CareMiniList = ({ title, items, empty, theme, onAction, actionLabel }) => (
-  <div className={`min-w-0 rounded-lg border ${theme.border} ${theme.panel} p-3`}>
-    <p className={`mb-3 text-xs font-black uppercase tracking-[0.12em] ${theme.subtext}`}>{title}</p>
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+  <div className={`h-fit w-[280px] shrink-0 rounded-lg border ${theme.border} ${theme.panel} p-3 sm:w-[320px] min-[1180px]:w-auto min-[1180px]:shrink`}>
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <p className={`min-w-0 text-[11px] font-black uppercase tracking-[0.12em] ${theme.subtext}`}>{title}</p>
+      <span className={`shrink-0 rounded-md border ${theme.border} px-2 py-1 text-[10px] font-black ${theme.subtext}`}>
+        {items.length}
+      </span>
+    </div>
+    <div className="grid gap-2">
       {items.slice(0, 3).map((item) => (
         <div key={item.id || item._id || item.name} className={`min-w-0 rounded-lg border ${theme.border} ${theme.panelMuted} p-3`}>
-          <p className={`break-words text-sm font-black leading-5 ${theme.text}`}>{item.name || item.fullName}</p>
-          <p className={`mt-1 break-words text-xs leading-5 ${theme.subtext}`}>
-            {item.specialization || item.category || item.vehicleNumber || "Available"} - {formatDistance(item)}
-          </p>
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#C8102E]/10 text-[#C8102E]">
+              <Icon name={actionLabel === "Request" ? "ambulance" : "doctor"} size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className={`whitespace-normal break-words text-sm font-black leading-5 ${theme.text}`}>{item.name || item.fullName}</p>
+              <p className={`mt-1 whitespace-normal break-words text-xs leading-5 ${theme.subtext}`}>
+                {item.specialization || item.category || item.vehicleNumber || "Available"}
+              </p>
+              <p className={`mt-0.5 text-xs font-bold ${theme.subtext}`}>{formatDistance(item)}</p>
+            </div>
+          </div>
           {onAction && (
-            <button onClick={() => onAction(item)} className="mt-3 h-8 rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white">
+            <button onClick={() => onAction(item)} className="mt-3 h-9 w-full rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white transition hover:bg-[#a50d25]">
               {actionLabel}
             </button>
           )}
         </div>
       ))}
-      {!items.length && <p className={`text-sm font-semibold leading-6 ${theme.subtext}`}>{empty}</p>}
+      {!items.length && (
+        <div className={`rounded-lg border border-dashed ${theme.border} ${theme.panelMuted} p-4 text-sm font-semibold leading-6 ${theme.subtext}`}>
+          {empty}
+        </div>
+      )}
     </div>
   </div>
 );
@@ -1689,11 +2032,160 @@ const ProviderTable = ({ providers, type, theme, onBook }) => (
   </div>
 );
 
+const AppointmentPaymentCard = ({ appointment, onPay, onReview, loading, theme }) => {
+  const isPaid = appointment.paymentStatus === "paid";
+  const canReview = appointment.appointmentStatus === "completed";
+  const doctor = appointment.doctorId || {};
+  const joinEnabled = appointment.zoomLink && canJoinAppointment(appointment);
+
+  return (
+    <div className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-4`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className={`text-sm font-black ${theme.text}`}>
+            Dr. {doctor.fullName || doctor.name || "Doctor"}
+          </p>
+          <p className={`mt-1 text-xs font-semibold ${theme.subtext}`}>
+            {new Date(appointment.appointmentDate).toLocaleDateString()} at {appointment.appointmentTime}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className={`rounded-md px-2 py-1 text-[11px] font-black ${
+            isPaid ? "bg-[#DCFCE7] text-[#166534]" : "bg-[#FEF3C7] text-[#92400E]"
+          }`}>
+            {isPaid ? "PAID" : "PAYMENT PENDING"}
+          </span>
+          <span className={`rounded-md border ${theme.border} ${theme.panel} px-2 py-1 text-[11px] font-black ${theme.text}`}>
+            {(appointment.appointmentStatus || "requested").toUpperCase()}
+          </span>
+        </div>
+      </div>
+
+      {appointment.patientNotes && (
+        <p className={`mt-3 text-sm ${theme.subtext}`}>{appointment.patientNotes}</p>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p className={`text-sm font-black ${theme.text}`}>
+          Rs. {Number(appointment.consultationFee || 0).toLocaleString()}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {appointment.zoomLink && (
+            joinEnabled ? (
+              <a
+                href={appointment.zoomLink}
+                target="_blank"
+                rel="noreferrer"
+                className="h-9 rounded-lg bg-[#0891B2] px-3 py-2 text-xs font-black text-white"
+              >
+                Join Meeting
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title={getJoinHelpText(appointment)}
+                className="h-9 rounded-lg bg-[#94A3B8] px-3 text-xs font-black text-white opacity-70"
+              >
+                Join Meeting
+              </button>
+            )
+          )}
+          {!isPaid && (
+            <button
+              type="button"
+              onClick={onPay}
+              disabled={loading}
+              className="h-9 rounded-lg bg-[#C8102E] px-3 text-xs font-black text-white transition hover:bg-[#a50d25] disabled:opacity-60"
+            >
+              {loading ? "Redirecting..." : "Pay Now"}
+            </button>
+          )}
+          {canReview && (
+            <button
+              type="button"
+              onClick={onReview}
+              className="h-9 rounded-lg border border-[#C8102E] px-3 text-xs font-black text-[#C8102E] transition hover:bg-[#C8102E] hover:text-white"
+            >
+              Review Doctor
+            </button>
+          )}
+        </div>
+      </div>
+      {appointment.zoomLink && !joinEnabled && (
+        <p className={`mt-2 text-xs font-semibold ${theme.subtext}`}>{getJoinHelpText(appointment)}</p>
+      )}
+    </div>
+  );
+};
+
+const PrescriptionCard = ({ item, theme, compact = false }) => (
+  <div className={`rounded-lg border ${theme.border} ${theme.panelMuted} ${compact ? "p-2.5" : "p-3"} ${compact ? "mb-2" : "mb-2"}`}>
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <p className={`${compact ? "text-xs" : "text-sm"} font-black ${theme.text}`}>
+          {item.medicine}{item.dosage ? ` - ${item.dosage}` : ""}
+        </p>
+        <p className={`${compact ? "text-[11px]" : "text-xs"} ${theme.subtext}`}>
+          {item.schedule}
+        </p>
+      </div>
+      <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+        {item.days}
+      </span>
+    </div>
+    <p className={`mt-1 ${compact ? "text-[11px]" : "text-xs"} font-semibold ${theme.subtext}`}>
+      Prescribed by {item.doctor}
+    </p>
+    {item.instructions && (
+      <p className={`mt-1 ${compact ? "text-[11px]" : "text-xs"} ${theme.subtext}`}>
+        {item.instructions}
+      </p>
+    )}
+  </div>
+);
+
+const AmbulancePaymentCard = ({ job, onReview, theme }) => {
+  const driver = job.driverId || {};
+
+  return (
+    <div className={`rounded-lg border ${theme.border} ${theme.panelMuted} p-4`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className={`text-sm font-black ${theme.text}`}>
+            {driver.fullName || driver.name || "Ambulance driver"}
+          </p>
+          <p className={`mt-1 text-xs font-semibold ${theme.subtext}`}>
+            {job.pickupLocation || "Pickup"} - {new Date(job.updatedAt || job.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+        <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black text-[#166534]">
+          COMPLETED
+        </span>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p className={`text-sm font-black ${theme.text}`}>
+          Rs. {Number(job.fare || 0).toLocaleString()}
+        </p>
+        <button
+          type="button"
+          onClick={onReview}
+          className="h-9 rounded-lg border border-[#C8102E] px-3 text-xs font-black text-[#C8102E] transition hover:bg-[#C8102E] hover:text-white"
+        >
+          Review Driver
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const BookingModal = ({
   doctor,
   form,
   setForm,
   pendingAppointment,
+  slotAvailability,
+  slotLoading,
   message,
   error,
   loading,
@@ -1728,19 +2220,56 @@ const BookingModal = ({
               required
               min={new Date().toISOString().slice(0, 10)}
               value={form.appointmentDate}
-              onChange={(event) => setForm({ ...form, appointmentDate: event.target.value })}
+              onChange={(event) => setForm({ ...form, appointmentDate: event.target.value, appointmentTime: "" })}
               className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
             />
           </div>
           <div>
             <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Time</label>
-            <input
-              type="time"
-              required
-              value={form.appointmentTime}
-              onChange={(event) => setForm({ ...form, appointmentTime: event.target.value })}
-              className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
-            />
+            {slotAvailability.allTimeSlots.length ? (
+              <div className={`min-h-10 rounded-lg border ${theme.border} ${theme.panelMuted} p-2`}>
+                <div className="flex flex-wrap gap-2">
+                  {slotAvailability.allTimeSlots.map((slot) => {
+                    const isBooked = slotAvailability.bookedTimes.includes(slot);
+                    const isUnavailable = !slotAvailability.availableDay;
+                    const isSelected = form.appointmentTime === slot;
+
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        disabled={isBooked || isUnavailable || pendingAppointment}
+                        onClick={() => setForm({ ...form, appointmentTime: slot })}
+                        className={`h-8 rounded-lg px-3 text-xs font-black transition ${
+                          isBooked || isUnavailable
+                            ? "cursor-not-allowed bg-[#FEE2E2] text-[#991B1B] opacity-70"
+                            : isSelected
+                              ? "bg-[#C8102E] text-white"
+                              : `border ${theme.border} ${theme.text}`
+                        }`}
+                      >
+                        {slot} {isUnavailable ? "Unavailable" : isBooked ? "Booked" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+                {slotLoading && <p className={`mt-2 text-xs font-semibold ${theme.subtext}`}>Checking slots...</p>}
+                {!slotAvailability.availableDay && !slotLoading && (
+                  <p className="mt-2 text-xs font-bold text-[#991B1B]">Doctor is not available on this date.</p>
+                )}
+                {slotAvailability.availableDay && !slotAvailability.availableTimeSlots.length && !slotLoading && (
+                  <p className="mt-2 text-xs font-bold text-[#991B1B]">All configured slots are booked for this date.</p>
+                )}
+              </div>
+            ) : (
+              <input
+                type="time"
+                required
+                value={form.appointmentTime}
+                onChange={(event) => setForm({ ...form, appointmentTime: event.target.value })}
+                className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+              />
+            )}
           </div>
         </div>
         <div>
@@ -1754,17 +2283,23 @@ const BookingModal = ({
           />
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="submit" disabled={loading || Boolean(pendingAppointment)} className="h-10 rounded-lg bg-[#0A1628] px-4 text-sm font-black text-white disabled:opacity-50">
-            {loading ? "Working..." : "Request"}
-          </button>
           <button
-  type="button"
-  onClick={onPay}
-  disabled={loading || !pendingAppointment}
-  className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50"
->
-  {loading ? "Redirecting..." : `Pay with Stripe`}
-</button>
+            type="submit"
+            disabled={loading || Boolean(pendingAppointment) || (slotAvailability.allTimeSlots.length > 0 && !form.appointmentTime)}
+            className="h-10 rounded-lg bg-[#0A1628] px-4 text-sm font-black text-white disabled:opacity-50"
+          >
+            {loading ? "Working..." : pendingAppointment ? "Already Requested" : "Request"}
+          </button>
+          {pendingAppointment?.paymentStatus !== "paid" && (
+            <button
+              type="button"
+              onClick={() => onPay(pendingAppointment)}
+              disabled={loading || !pendingAppointment}
+              className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50"
+            >
+              {loading ? "Redirecting..." : "Pay with Stripe"}
+            </button>
+          )}
         </div>
       </form>
     </section>
@@ -1840,6 +2375,76 @@ const AmbulanceRequestModal = ({
   </div>
 );
 
+const ReviewModal = ({
+  target,
+  form,
+  setForm,
+  message,
+  error,
+  loading,
+  onSubmit,
+  onClose,
+  theme,
+}) => {
+  const isDoctor = target.type === "doctor";
+  const item = target.item || {};
+  const doctor = item.doctorId || {};
+  const driver = item.driverId || {};
+  const title = isDoctor ? "Review doctor" : "Review ambulance driver";
+  const subtitle = isDoctor
+    ? `Dr. ${doctor.fullName || doctor.name || "Doctor"}`
+    : `${driver.fullName || driver.name || "Ambulance driver"} - ${item.vehicleNumber || driver.vehicleNumber || "Ambulance"}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020617]/60 p-4">
+      <section className={`w-full max-w-lg rounded-lg border ${theme.border} ${theme.panel} p-5 shadow-2xl`}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className={`text-lg font-black ${theme.text}`}>{title}</h2>
+            <p className={`text-sm font-semibold ${theme.subtext}`}>{subtitle}</p>
+          </div>
+          <button onClick={onClose} className={`h-9 rounded-lg border ${theme.border} px-3 text-sm font-bold ${theme.text}`}>
+            Close
+          </button>
+        </div>
+
+        {message && <div className="mt-4 rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-sm font-bold text-[#166534]">{message}</div>}
+        {error && <div className="mt-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2 text-sm font-bold text-[#991B1B]">{error}</div>}
+
+        <form onSubmit={onSubmit} className="mt-4 space-y-3">
+          <div>
+            <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Rating</label>
+            <select
+              value={form.rating}
+              onChange={(event) => setForm({ ...form, rating: Number(event.target.value) })}
+              className={`h-10 w-full rounded-lg border ${theme.border} ${theme.panelMuted} px-3 text-sm ${theme.text} outline-none`}
+            >
+              {[5, 4, 3, 2, 1].map((rating) => (
+                <option key={rating} value={rating}>{rating} / 5</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={`mb-1 block text-xs font-black ${theme.subtext}`}>Comment</label>
+            <textarea
+              value={form.comment}
+              onChange={(event) => setForm({ ...form, comment: event.target.value })}
+              maxLength={1000}
+              className={`h-24 w-full resize-none rounded-lg border ${theme.border} ${theme.panelMuted} px-3 py-2 text-sm ${theme.text} outline-none`}
+              placeholder="Share your experience"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button disabled={loading || Boolean(message)} className="h-10 rounded-lg bg-[#C8102E] px-4 text-sm font-black text-white disabled:opacity-50">
+              {loading ? "Submitting..." : "Submit Review"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+};
+
 const ProviderRow = ({ provider, type, theme }) => {
   const isDoctor = type === "doctor";
   return (
@@ -1865,12 +2470,77 @@ const ProviderRow = ({ provider, type, theme }) => {
   );
 };
 
-const EmergencyPanel = ({ active, doctors, hospitals, drivers, onRequestAmbulance, theme }) => (
+const AmbulanceTrackingCard = ({ job, driverTrackingPlace, userLocation, theme }) => {
+  if (!job) return null;
+
+  const driver = job.driverId || {};
+  const canTrack = Boolean(driverTrackingPlace);
+  const statusText = {
+    requested: "Waiting for driver response",
+    accepted: "Driver accepted your request",
+    active: "Ambulance is on the way",
+  }[job.status] || "Ambulance request active";
+
+  return (
+    <div className={`m-4 rounded-lg border ${theme.border} ${theme.panelMuted} p-4`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className={`text-sm font-black ${theme.text}`}>{statusText}</p>
+          <p className={`mt-1 text-xs font-semibold ${theme.subtext}`}>
+            {driver.fullName || driver.name || "Ambulance driver"} - {job.pickupLocation}
+          </p>
+        </div>
+        <span className="rounded-md bg-[#DCFCE7] px-2 py-1 text-[11px] font-black uppercase text-[#166534]">
+          {job.status}
+        </span>
+      </div>
+
+      {canTrack ? (
+        <div className={`mt-4 overflow-hidden rounded-lg border ${theme.border}`}>
+          <NearbyCareMap userLocation={userLocation} places={[driverTrackingPlace]} />
+        </div>
+      ) : (
+        <div className={`mt-4 rounded-lg border ${theme.border} ${theme.panel} p-4 text-sm font-semibold ${theme.subtext}`}>
+          Driver location will appear here after the driver accepts and has latitude/longitude saved in profile.
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {driver.mobileNumber && (
+          <a href={`tel:${driver.mobileNumber}`} className="rounded-lg bg-[#C8102E] px-3 py-2 text-xs font-black text-white">
+            Call Driver
+          </a>
+        )}
+        <span className={`text-xs font-semibold ${theme.subtext}`}>
+          Vehicle: {driver.vehicleNumber || "Not set"} - {driver.ambulanceType || "Ambulance"}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const EmergencyPanel = ({
+  active,
+  doctors,
+  hospitals,
+  drivers,
+  activeAmbulanceJob,
+  driverTrackingPlace,
+  userLocation,
+  onRequestAmbulance,
+  theme,
+}) => (
   <section className={`rounded-lg border ${active ? "border-[#C8102E]" : theme.border} ${theme.panel} overflow-hidden shadow-[0_14px_34px_rgba(10,22,40,0.06)]`}>
     <div className="border-b border-[#C8102E]/20 bg-[#C8102E] px-4 py-3 text-white">
       <h2 className="text-base font-black">Emergency Nearby Results</h2>
       <p className="text-xs font-medium text-white/80">Doctors, hospitals, and ambulance drivers within 10 to 15 km.</p>
     </div>
+    <AmbulanceTrackingCard
+      job={activeAmbulanceJob}
+      driverTrackingPlace={driverTrackingPlace}
+      userLocation={userLocation}
+      theme={theme}
+    />
     <div className="grid gap-3 p-4 lg:grid-cols-3">
       <EmergencyColumn title="Nearby Doctors" icon="doctor" items={doctors} theme={theme} />
       <EmergencyColumn title="Nearby Hospitals" icon="hospital" items={hospitals} theme={theme} />

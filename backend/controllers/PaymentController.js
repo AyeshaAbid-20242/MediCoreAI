@@ -1,7 +1,16 @@
 import Stripe from "stripe";
 import User from "../models/user.js";
 import Appointment from "../models/Appointment.js";
-const getStripe = () => new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const getStripe = () => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY is missing in backend/.env.");
+  }
+
+  return new Stripe(process.env.STRIPE_SECRET_KEY);
+};
+
+const getFrontendUrl = () => process.env.FRONTEND_URL || "http://localhost:5173";
 
 const PLANS = {
   doctor: {
@@ -14,6 +23,40 @@ const PLANS = {
     Professional: { monthly: 10, yearly: 100 },
     Premium: { monthly: 20, yearly: 200 },
   },
+};
+
+const activateSubscriptionFromSession = async (session) => {
+  const { userId, packageName, months } = session.metadata || {};
+  if (!userId || !packageName || !months) return null;
+
+  const user = await User.findById(userId);
+  if (!user) return null;
+
+  const start = new Date();
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + Number(months));
+
+  user.subscriptionStatus = "active";
+  user.packageName = packageName;
+  user.subscriptionStart = start;
+  user.subscriptionEnd = end;
+  await user.save();
+
+  return user;
+};
+
+const markAppointmentPaidFromSession = async (session, patientId = null) => {
+  const { appointmentId, type } = session.metadata || {};
+  if (type !== "appointment" || !appointmentId) return null;
+
+  const appointment = await Appointment.findById(appointmentId);
+  if (!appointment) return null;
+  if (patientId && appointment.patientId.toString() !== patientId.toString()) return null;
+
+  appointment.paymentStatus = "paid";
+  await appointment.save();
+
+  return appointment;
 };
 
 const createCheckoutSession = async (req, res) => {
@@ -60,8 +103,8 @@ unit_amount: price * 100,
         months: months.toString(),
         role: user.role,
       },
-      success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+      success_url: `${getFrontendUrl()}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${getFrontendUrl()}/payment/cancel`,
     });
 
     res.status(200).json({ url: session.url, sessionId: session.id });
@@ -81,20 +124,8 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "Payment not completed" });
     }
 
-    const { userId, packageName, months } = session.metadata;
-
-    const user = await User.findById(userId);
+    const user = await activateSubscriptionFromSession(session);
     if (!user) return res.status(404).json({ message: "User not found" });
-
-    const start = new Date();
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + Number(months));
-
-    user.subscriptionStatus = "active";
-    user.packageName = packageName;
-    user.subscriptionStart = start;
-    user.subscriptionEnd = end;
-    await user.save();
 
     res.status(200).json({
       message: "Payment verified and subscription activated",
@@ -128,17 +159,10 @@ const handleWebhook = async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     if (session.payment_status === "paid") {
-      const { userId, packageName, months } = session.metadata;
-      const user = await User.findById(userId);
-      if (user) {
-        const start = new Date();
-        const end = new Date(start);
-        end.setMonth(end.getMonth() + Number(months));
-        user.subscriptionStatus = "active";
-        user.packageName = packageName;
-        user.subscriptionStart = start;
-        user.subscriptionEnd = end;
-        await user.save();
+      if (session.metadata?.type === "appointment") {
+        await markAppointmentPaidFromSession(session);
+      } else {
+        await activateSubscriptionFromSession(session);
       }
     }
   }
@@ -166,6 +190,12 @@ const createAppointmentCheckout = async (req, res) => {
       return res.status(400).json({ message: "Appointment already paid" });
     }
 
+    if (["rejected", "cancelled"].includes(appointment.appointmentStatus)) {
+      return res.status(400).json({
+        message: "This appointment is closed and cannot be paid.",
+      });
+    }
+
     const fee = appointment.consultationFee || 10;
 
     const session = await stripe.checkout.sessions.create({
@@ -188,8 +218,8 @@ const createAppointmentCheckout = async (req, res) => {
         appointmentId: appointmentId,
         type: "appointment",
       },
-      success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}&type=appointment`,
-      cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
+      success_url: `${getFrontendUrl()}/payment/success?session_id={CHECKOUT_SESSION_ID}&type=appointment`,
+      cancel_url: `${getFrontendUrl()}/payment/cancel`,
     });
 
     res.status(200).json({ url: session.url, sessionId: session.id });
@@ -209,15 +239,10 @@ const verifyAppointmentPayment = async (req, res) => {
       return res.status(400).json({ message: "Payment not completed" });
     }
 
-    const { appointmentId } = session.metadata;
-
-    const appointment = await Appointment.findById(appointmentId);
+    const appointment = await markAppointmentPaidFromSession(session, req.user._id);
     if (!appointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }
-
-    appointment.paymentStatus = "paid";
-    await appointment.save();
 
     res.status(200).json({
       message: "Payment verified. Doctor can now accept your appointment.",

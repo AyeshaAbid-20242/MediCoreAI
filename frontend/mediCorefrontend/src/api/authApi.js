@@ -8,6 +8,10 @@ export const registerUser = (payload) => {
   return api.post("/auth/register", payload);
 };
 
+export const getCurrentUser = () => {
+  return api.get("/auth/me");
+};
+
 export const sendForgotPasswordOtp = (email) => {
   return api.post("/auth/forgot-password", { email });
 };

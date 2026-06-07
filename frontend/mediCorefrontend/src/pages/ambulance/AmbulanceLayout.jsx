@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AmbulanceSidebar from "./AmbulanceSidebar";
 import { ambulanceNavItems } from "../sidebarNav";
+import ThemeToggle from "../../components/ThemeToggle";
 
 const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMode, theme, children }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,6 +86,8 @@ const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMod
               </div>
 
               <div className="flex items-center gap-2">
+                <ThemeToggle darkMode={darkMode} onToggle={() => setDarkMode(!darkMode)} theme={theme} />
+
                 {/* Status Badge */}
                 <div className={`rounded-lg px-3 py-2 text-xs font-black
                   ${driver?.status === "active" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
@@ -92,15 +95,6 @@ const AmbulanceLayout = ({ driver, activeTab, setActiveTab, darkMode, setDarkMod
                     "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"}`}>
                   {(driver?.status || "pending").toUpperCase()}
                 </div>
-
-                {/* Dark mode toggle */}
-                <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg font-black ${theme.text}`}
-                  aria-label="Toggle dark mode"
-                >
-                  {darkMode ? "☀" : "◐"}
-                </button>
 
                 {/* Driver Info */}
                 <div className={`hidden items-center gap-2 rounded-lg border ${theme.border} ${theme.panel} px-3 py-2 lg:flex`}>

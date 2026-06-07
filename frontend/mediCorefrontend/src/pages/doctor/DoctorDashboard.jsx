@@ -22,7 +22,7 @@ const DoctorDashboard = () => {
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("medicore-theme") !== "light");
 
   const theme = useMemo(
     () =>
@@ -72,6 +72,10 @@ const DoctorDashboard = () => {
     };
     void init();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    localStorage.setItem("medicore-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   const visibleDashboard = useMemo(() => {
     const appointments = dashboard.appointments || [];

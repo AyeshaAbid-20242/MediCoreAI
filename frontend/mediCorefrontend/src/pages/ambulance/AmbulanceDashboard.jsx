@@ -1,16 +1,18 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import AmbulanceLayout from "./AmbulanceLayout";
 import AmbulanceOverview from "./tabs/AmbulanceOverview";
 import AmbulanceProfile from "./tabs/AmbulanceProfile";
 import AmbulanceJobs from "./tabs/AmbulanceJobs";
 import AmbulancePayments from "./tabs/AmbulancePayments";
+import AmbulanceReviews from "./tabs/AmbulanceReviews";
 import AmbulanceSubscription from "./tabs/AmbulanceSubscription";
-import { getDriverDashboard, updateDriverJobStatus } from "../../api/ambulanceApi";
+import { getDriverDashboard, updateDriverJobLocation, updateDriverJobStatus } from "../../api/ambulanceApi";
 
 const emptyDashboard = {
   driver: null,
   stats: {},
   jobs: [],
+  reviews: [],
 };
 
 const AmbulanceDashboard = () => {
@@ -18,7 +20,8 @@ const AmbulanceDashboard = () => {
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("medicore-theme") !== "light");
+  const lastLocationSentRef = useRef({ jobId: "", at: 0, latitude: null, longitude: null });
 
   const theme = useMemo(() =>
     darkMode ? {
@@ -63,14 +66,70 @@ const AmbulanceDashboard = () => {
     void init();
   }, [loadDashboard]);
 
+  useEffect(() => {
+    localStorage.setItem("medicore-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  const activeTrackingJob = useMemo(
+    () => dashboard.jobs.find((job) => ["accepted", "active"].includes(job.status)),
+    [dashboard.jobs]
+  );
+
+  useEffect(() => {
+    if (!activeTrackingJob?._id || !navigator.geolocation) return undefined;
+
+    const watcherId = navigator.geolocation.watchPosition(
+      async (position) => {
+        const latitude = Number(position.coords.latitude.toFixed(6));
+        const longitude = Number(position.coords.longitude.toFixed(6));
+        const previous = lastLocationSentRef.current;
+        const now = Date.now();
+        const movedEnough =
+          previous.latitude === null ||
+          Math.abs(latitude - previous.latitude) > 0.00008 ||
+          Math.abs(longitude - previous.longitude) > 0.00008;
+        const oldEnough = now - previous.at > 8000;
+
+        if (previous.jobId === activeTrackingJob._id && !movedEnough && !oldEnough) return;
+
+        lastLocationSentRef.current = {
+          jobId: activeTrackingJob._id,
+          at: now,
+          latitude,
+          longitude,
+        };
+
+        try {
+          const response = await updateDriverJobLocation(activeTrackingJob._id, { latitude, longitude });
+          setDashboard((current) => ({
+            ...current,
+            jobs: current.jobs.map((job) =>
+              job._id === activeTrackingJob._id ? response.data.job : job
+            ),
+          }));
+        } catch {
+          // Keep the ride usable even if one GPS update fails.
+        }
+      },
+      () => {},
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 12000,
+      }
+    );
+
+    return () => navigator.geolocation.clearWatch(watcherId);
+  }, [activeTrackingJob?._id]);
+
   const updateDriver = (driver) => {
     const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
     localStorage.setItem("user", JSON.stringify({ ...savedUser, ...driver }));
     setDashboard((current) => ({ ...current, driver }));
   };
 
-  const updateJobStatus = async (jobId, status) => {
-    await updateDriverJobStatus(jobId, { status });
+  const updateJobStatus = async (jobId, status, extra = {}) => {
+    await updateDriverJobStatus(jobId, { status, ...extra });
     await loadDashboard();
   };
 
@@ -114,6 +173,7 @@ const AmbulanceDashboard = () => {
     ),
     jobs: (
       <AmbulanceJobs
+        driver={dashboard.driver}
         jobs={dashboard.jobs}
         onRefresh={loadDashboard}
         onUpdateStatus={updateJobStatus}
@@ -123,6 +183,14 @@ const AmbulanceDashboard = () => {
     payments: (
       <AmbulancePayments
         driver={dashboard.driver}
+        jobs={dashboard.jobs}
+        theme={theme}
+      />
+    ),
+    reviews: (
+      <AmbulanceReviews
+        reviews={dashboard.reviews}
+        stats={dashboard.stats}
         theme={theme}
       />
     ),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getApiError } from "../../api/axios";
 import { loginUser } from "../../api/authApi";
@@ -8,8 +8,12 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("medicore-theme") !== "light");
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("medicore-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getApiError } from "../../api/axios";
 import { registerUser } from "../../api/authApi";
 
 const Register = () => {
   const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("medicore-theme") !== "light");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -22,6 +22,10 @@ const Register = () => {
     licenseNumber: "",
     vehicleNumber: ""
   });
+
+  useEffect(() => {
+    localStorage.setItem("medicore-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -90,7 +94,7 @@ const Register = () => {
         {/* Top bar */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="bg-red-500 p-2 rounded-lg">
+            <div className="rounded-lg bg-red-500 p-2 text-xl font-black text-white [&>span]:hidden">+
               <span className="text-white text-xl">❤️</span>
             </div>
             <div>
@@ -100,8 +104,11 @@ const Register = () => {
           </div>
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className={`p-2 rounded-full text-xl transition-colors duration-300 ${darkMode ? "bg-[#0f1623] text-yellow-400" : "bg-gray-200 text-gray-700"}`}
+            className={`relative p-2 rounded-full text-xl text-transparent transition-colors duration-300 ${darkMode ? "bg-[#0f1623]" : "bg-gray-200"}`}
           >
+            <span className={`absolute inset-0 flex items-center justify-center ${darkMode ? "text-yellow-400" : "text-gray-700"}`}>
+              {darkMode ? "☀" : "◐"}
+            </span>
             {darkMode ? "🌙" : "☀️"}
           </button>
         </div>

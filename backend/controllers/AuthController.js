@@ -369,6 +369,26 @@ const login = async (req, res) => {
   }
 };
 
+const getMe = (req, res) => {
+  res.status(200).json({
+    message: "Current user fetched successfully",
+    user: {
+      id: req.user._id,
+      name: req.user.name,
+      fullName: req.user.fullName,
+      email: req.user.email,
+      role: req.user.role,
+      status: req.user.status,
+      subscriptionStatus: req.user.subscriptionStatus,
+      packageName: req.user.packageName,
+      subscriptionStart: req.user.subscriptionStart,
+      subscriptionEnd: req.user.subscriptionEnd,
+      mobileNumber: req.user.mobileNumber,
+      city: req.user.city,
+    },
+  });
+};
+
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -505,4 +525,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-export { register, login, forgotPassword, verifyOTP, resetPassword };
+export { register, login, getMe, forgotPassword, verifyOTP, resetPassword };

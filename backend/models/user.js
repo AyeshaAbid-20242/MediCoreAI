@@ -43,6 +43,18 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: 80,
     },
+    clinicName: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 120,
+    },
+    clinicAddress: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 240,
+    },
     latitude: {
       type: Number,
       default: null,

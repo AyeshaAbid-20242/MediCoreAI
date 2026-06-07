@@ -8,6 +8,12 @@ export const getPatientAppointments = () => {
   return api.get("/appointments/me");
 };
 
+export const getDoctorAvailability = (doctorId, date) => {
+  return api.get(`/appointments/doctor/${doctorId}/availability`, {
+    params: { date },
+  });
+};
+
 export const payAppointment = (appointmentId) => {
   return api.patch(`/appointments/${appointmentId}/pay`);
 };

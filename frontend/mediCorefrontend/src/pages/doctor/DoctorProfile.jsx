@@ -5,6 +5,9 @@ import { updateDoctorProfile } from "../../api/doctorApi";
 const emptyProfile = {
   name: "",
   city: "",
+  clinicName: "",
+  clinicAddress: "",
+  mobileNumber: "",
   specialization: "",
   experience: "",
   licenseNumber: "",
@@ -27,6 +30,9 @@ const DoctorProfile = ({ doctor, onUpdated, theme }) => {
       setForm({
         name: doctor?.fullName || doctor?.name || "",
         city: doctor?.city || "",
+        clinicName: doctor?.clinicName || "",
+        clinicAddress: doctor?.clinicAddress || "",
+        mobileNumber: doctor?.mobileNumber || "",
         specialization: doctor?.specialization || "",
         experience: doctor?.experience || "",
         licenseNumber: doctor?.licenseNumber || "",
@@ -79,6 +85,9 @@ const DoctorProfile = ({ doctor, onUpdated, theme }) => {
       <form onSubmit={handleSubmit} className="mt-5 grid gap-4 md:grid-cols-2">
         <Field theme={theme} label="Full Name" name="name" value={form.name} onChange={handleChange} required minLength={2} maxLength={80} />
         <Field theme={theme} label="City" name="city" value={form.city} onChange={handleChange} />
+        <Field theme={theme} label="Clinic Name" name="clinicName" value={form.clinicName} onChange={handleChange} maxLength={120} placeholder="e.g. MediCore Family Clinic" />
+        <Field theme={theme} label="Clinic Address" name="clinicAddress" value={form.clinicAddress} onChange={handleChange} maxLength={240} placeholder="Street, area, city" />
+        <Field theme={theme} label="Phone Number" name="mobileNumber" value={form.mobileNumber} onChange={handleChange} maxLength={20} placeholder="03xx xxxxxxx" />
         <Field theme={theme} label="Specialization" name="specialization" value={form.specialization} onChange={handleChange} maxLength={80} />
         <Field theme={theme} label="Experience" name="experience" type="number" value={form.experience} onChange={handleChange} min={0} max={70} />
         <Field theme={theme} label="PMDC / License Number" name="licenseNumber" value={form.licenseNumber} onChange={handleChange} maxLength={60} />

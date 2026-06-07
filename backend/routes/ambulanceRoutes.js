@@ -5,6 +5,7 @@ import {
   getDriverDashboard,
   getPatientAmbulanceJobs,
   requestAmbulance,
+  updateDriverJobLocation,
   updateDriverJobStatus,
   updateDriverProfile,
   activateDriverSubscription,
@@ -20,6 +21,7 @@ router.get("/me", protect, authorizeRoles("ambulance_driver"), getDriverMe);
 router.get("/dashboard", protect, authorizeRoles("ambulance_driver"), getDriverDashboard);
 router.get("/jobs", protect, authorizeRoles("ambulance_driver"), getDriverJobs);
 router.patch("/jobs/:id/status", protect, authorizeRoles("ambulance_driver"), updateDriverJobStatus);
+router.patch("/jobs/:id/location", protect, authorizeRoles("ambulance_driver"), updateDriverJobLocation);
 router.put("/me/profile", protect, authorizeRoles("ambulance_driver"), updateDriverProfile);
 router.post("/me/subscription", protect, authorizeRoles("ambulance_driver"), activateDriverSubscription);
 router.put("/profile", protect, authorizeRoles("ambulance_driver"), updateDriverProfile);

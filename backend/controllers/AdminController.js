@@ -153,9 +153,11 @@ import User from "../models/user.js";
 import bcrypt from "bcryptjs";
 import { sendTempPassword } from "../helper/emailHelper.js";
 import Appointment from "../models/Appointment.js";
+import AmbulanceReview from "../models/AmbulanceReview.js";
 import Review from "../models/Review.js";
 import SubscriptionPlan from "../models/SubscriptionPlan.js";
 import nodemailer from "nodemailer";
+import { formatUsage, resetUsage } from "../services/aiUsageService.js";
 import {
   isStrongPassword,
   isValidEmail,
@@ -297,9 +299,16 @@ const deleteUser = async (req, res) => {
 
 const getAdminStats = async (req, res) => {
   try {
-    const totalDoctors = await User.countDocuments({ role: "doctor", status: "active" });
+    const activeProviderStatuses = ["approved", "active"];
+    const totalDoctors = await User.countDocuments({
+      role: "doctor",
+      status: { $in: activeProviderStatuses },
+    });
     const totalPatients = await User.countDocuments({ role: "patient" });
-    const totalDrivers = await User.countDocuments({ role: "ambulance_driver", status: "active" });
+    const totalDrivers = await User.countDocuments({
+      role: "ambulance_driver",
+      status: { $in: activeProviderStatuses },
+    });
     const pendingApprovals = await User.countDocuments({ status: "pending" });
     const totalUsers = await User.countDocuments({ role: { $ne: "admin" } });
     res.status(200).json({
@@ -308,6 +317,24 @@ const getAdminStats = async (req, res) => {
       totalDrivers,
       pendingApprovals,
       totalUsers,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+const resetPatientAiUsage = async (req, res) => {
+  try {
+    if (!validateIdParam(req, res)) return;
+
+    const patient = await User.findOne({ _id: req.params.id, role: "patient" });
+    if (!patient) return res.status(404).json({ message: "Patient not found" });
+
+    const usage = await resetUsage(patient._id);
+
+    res.status(200).json({
+      message: "Patient AI usage reset successfully",
+      usage: formatUsage(usage),
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -556,6 +583,7 @@ const getDoctorRatings = async (req, res) => {
   try {
     const reviews = await Review.find()
       .populate("doctorId", "name specialization")
+      .populate("driverId", "name fullName vehicleNumber ambulanceType")
       .populate("patientId", "name");
 
     const doctorRatings = {};
@@ -756,11 +784,19 @@ const changeAdminPassword = async (req, res) => {
 // ==========================================
 const getAllReviews = async (req, res) => {
   try {
-    const reviews = await Review.find()
+    const doctorReviews = await Review.find()
       .populate("doctorId", "name specialization")
       .populate("patientId", "name email")
       .populate("appointmentId", "appointmentDate appointmentTime")
       .sort({ createdAt: -1 });
+    const ambulanceReviews = await AmbulanceReview.find()
+      .populate("driverId", "name fullName vehicleNumber ambulanceType")
+      .populate("patientId", "name email")
+      .populate("ambulanceJobId", "pickupLocation destination fare status")
+      .sort({ createdAt: -1 });
+    const reviews = [...doctorReviews, ...ambulanceReviews].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
 
     res.status(200).json({ count: reviews.length, reviews });
   } catch (error) {
@@ -775,10 +811,14 @@ const deleteReview = async (req, res) => {
   try {
     if (!validateIdParam(req, res)) return;
 
-    const review = await Review.findById(req.params.id);
+    const review = await Review.findById(req.params.id) || await AmbulanceReview.findById(req.params.id);
     if (!review) return res.status(404).json({ message: "Review not found" });
 
-    await Review.findByIdAndDelete(req.params.id);
+    if (review.doctorId) {
+      await Review.findByIdAndDelete(req.params.id);
+    } else {
+      await AmbulanceReview.findByIdAndDelete(req.params.id);
+    }
     res.status(200).json({ message: "Review deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -792,6 +832,7 @@ export {
   getAllUsers,
   deleteUser,
   getAdminStats,
+  resetPatientAiUsage,
   getAllSubscriptions,
   updateSubscription,
   getAllAppointments,

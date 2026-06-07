@@ -1,7 +1,10 @@
 import Appointment from "../models/Appointment.js";
+import MedicalRecord from "../models/MedicalRecord.js";
+import Prescription from "../models/Prescription.js";
 import Review from "../models/Review.js";
 import User from "../models/user.js";
 import {
+  isValidObjectId,
   sendValidationError,
   toNumber,
   toStringArray,
@@ -37,6 +40,9 @@ const updateDoctorProfile = async (req, res) => {
       "name",
       "fullName",
       "city",
+      "clinicName",
+      "clinicAddress",
+      "mobileNumber",
       "specialization",
       "experience",
       "licenseNumber",
@@ -57,6 +63,9 @@ const updateDoctorProfile = async (req, res) => {
     if (updates.name !== undefined) updates.name = trimString(updates.name);
     if (updates.fullName !== undefined) updates.fullName = trimString(updates.fullName);
     if (updates.city !== undefined) updates.city = trimString(updates.city);
+    if (updates.clinicName !== undefined) updates.clinicName = trimString(updates.clinicName);
+    if (updates.clinicAddress !== undefined) updates.clinicAddress = trimString(updates.clinicAddress);
+    if (updates.mobileNumber !== undefined) updates.mobileNumber = trimString(updates.mobileNumber);
     if (updates.specialization !== undefined) {
       updates.specialization = trimString(updates.specialization);
     }
@@ -236,8 +245,79 @@ const getDoctorDashboard = async (req, res) => {
   }
 };
 
+const createAppointmentPrescription = async (req, res) => {
+  try {
+    if (!isDoctorApproved(req.user)) {
+      return res.status(403).json({
+        message: "Your doctor account must be approved before creating prescriptions.",
+      });
+    }
+
+    const appointmentId = req.params.appointmentId;
+    const medicine = trimString(req.body.medicine);
+    const schedule = trimString(req.body.schedule);
+    const dosage = trimString(req.body.dosage) || "";
+    const duration = trimString(req.body.duration) || "";
+    const instructions = trimString(req.body.instructions) || "";
+    const errors = [];
+
+    if (!isValidObjectId(appointmentId)) errors.push("Valid appointment id is required.");
+    if (!medicine) errors.push("Medicine is required.");
+    if (!schedule) errors.push("Schedule is required.");
+    if (instructions.length > 1000) errors.push("Instructions cannot exceed 1000 characters.");
+
+    if (errors.length) return sendValidationError(res, errors);
+
+    const appointment = await Appointment.findOne({
+      _id: appointmentId,
+      doctorId: req.user._id,
+      appointmentStatus: { $in: ["accepted", "completed"] },
+    }).populate("patientId", "name fullName email");
+
+    if (!appointment) {
+      return res.status(404).json({
+        message: "Accepted or completed appointment not found for this doctor.",
+      });
+    }
+
+    const prescription = await Prescription.create({
+      patientId: appointment.patientId._id,
+      doctorId: req.user._id,
+      medicine,
+      dosage,
+      schedule,
+      duration,
+      instructions,
+      status: req.body.status || "active",
+      prescribedAt: new Date(),
+    });
+
+    await MedicalRecord.create({
+      patientId: appointment.patientId._id,
+      doctorId: req.user._id,
+      title: `Prescription: ${medicine}`,
+      recordType: "prescription",
+      department: req.user.specialization || "General",
+      summary: [dosage, schedule, duration, instructions].filter(Boolean).join(" | "),
+      status: "completed",
+      recordDate: new Date(),
+    });
+
+    const populatedPrescription = await Prescription.findById(prescription._id)
+      .populate("doctorId", "name fullName specialization email");
+
+    res.status(201).json({
+      message: "Prescription created successfully.",
+      prescription: populatedPrescription,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 export {
   activateDoctorSubscription,
+  createAppointmentPrescription,
   getDoctorDashboard,
   getDoctorMe,
   getPublicDoctors,

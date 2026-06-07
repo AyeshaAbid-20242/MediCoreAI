@@ -22,7 +22,13 @@ const Reviews = ({ reviews, onDelete, theme }) => {
 </div>
       ) : (
         <div className="space-y-3">
-          {reviews.map((r, i) => (
+          {reviews.map((r, i) => {
+            const reviewedName = r.doctorId
+              ? `Dr. ${r.doctorId.name || "Doctor"}`
+              : r.driverId?.fullName || r.driverId?.name || "Ambulance driver";
+            const reviewedMeta = r.doctorId?.specialization || r.driverId?.vehicleNumber || r.driverId?.ambulanceType;
+
+            return (
             <motion.div
               key={r._id}
               initial={{ opacity: 0, y: 10 }}
@@ -39,10 +45,10 @@ const Reviews = ({ reviews, onDelete, theme }) => {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className={`font-black ${theme.text}`}>{r.patientId?.name || "Patient"}</p>
                       <span className={`text-xs font-semibold ${theme.subtext}`}>reviewed</span>
-                      <p className={`font-black ${theme.text}`}>Dr. {r.doctorId?.name || "Doctor"}</p>
-                      {r.doctorId?.specialization && (
+                      <p className={`font-black ${theme.text}`}>{reviewedName}</p>
+                      {reviewedMeta && (
                         <span className="rounded-md bg-[#DBEAFE] px-2 py-0.5 text-[10px] font-black text-[#1E40AF]">
-                          {r.doctorId.specialization}
+                          {reviewedMeta}
                         </span>
                       )}
                     </div>
@@ -70,7 +76,8 @@ const Reviews = ({ reviews, onDelete, theme }) => {
                 </button>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -20,6 +20,7 @@ import {
   getSubscriptionPlans,
   rejectUser,
   resendTempPassword,
+  resetPatientAiUsage,
   sendEmailToUser,
   updateSubscription,
   updateSubscriptionPlans,
@@ -41,6 +42,7 @@ router.patch("/users/:id/reject", rejectUser);
 router.patch("/users/:id/block", blockUnblockUser);
 router.post("/users/:id/password", resendTempPassword);
 router.post("/users/:id/emails", sendEmailToUser);
+router.post("/users/:id/ai-usage/reset", resetPatientAiUsage);
 
 router.post("/emails/broadcast", broadcastEmail);
 

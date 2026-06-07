@@ -3,7 +3,7 @@ import { getAllowedAIModels, getSafeAIModel } from "../config/aiModels.js";
 import getOpenRouter from "../config/openRouter.js";
 import { sendValidationError, toNumber, trimString } from "../helper/validators.js";
 import { consumeUsage, formatUsage, getUsage } from "../services/aiUsageService.js";
-import { fetchNearbyCareFromOsm, getDistanceMeters } from "../services/nearbyCareService.js";
+import { fetchNearbyCare, getDistanceMeters } from "../services/nearbyCareService.js";
 import { getCareFocus } from "../services/symptomCareService.js";
 
 const activeStatuses = ["approved", "active"];
@@ -53,12 +53,18 @@ const getPlatformProviders = async (req, res) => {
   }
 };
 
-const getAIModels = (req, res) => {
-  res.status(200).json({
-    message: "AI models fetched successfully",
-    models: getAllowedAIModels(),
-    usage: formatUsage(getUsage(req.user._id.toString())),
-  });
+const getAIModels = async (req, res) => {
+  try {
+    const usage = await getUsage(req.user._id);
+
+    res.status(200).json({
+      message: "AI models fetched successfully",
+      models: getAllowedAIModels(),
+      usage: formatUsage(usage),
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 };
 
 const analyzeSymptoms = async (req, res) => {
@@ -70,8 +76,7 @@ const analyzeSymptoms = async (req, res) => {
       return sendValidationError(res, ["Please describe your symptoms."]);
     }
 
-    const patientId = req.user._id.toString();
-    const { allowed, usage } = consumeUsage(patientId);
+    const { allowed, usage } = await consumeUsage(req.user._id);
 
     if (!allowed) {
       return res.status(429).json({
@@ -168,12 +173,16 @@ const getNearbyCare = async (req, res) => {
 
     let places = [];
     let hospitals = [];
+    let ambulanceServices = [];
     let osmMessage = "Nearby care fetched successfully";
 
     try {
-      places = await fetchNearbyCareFromOsm({ lat: latitude, lng: longitude, radius });
+      places = await fetchNearbyCare({ lat: latitude, lng: longitude, radius });
       hospitals = places.filter((place) =>
         ["hospital", "clinic", "emergency"].includes(place.type)
+      );
+      ambulanceServices = places.filter((place) =>
+        ["ambulance_station", "ambulance"].includes(place.type)
       );
     } catch (error) {
       console.error("Nearby care OSM lookup failed:", error.message);
@@ -187,6 +196,7 @@ const getNearbyCare = async (req, res) => {
       message: osmMessage,
       places,
       hospitals,
+      ambulanceServices,
       doctors,
       ambulanceDrivers,
     });
@@ -196,6 +206,7 @@ const getNearbyCare = async (req, res) => {
       message: "Nearby care service is temporarily unavailable. Please try again shortly.",
       places: [],
       hospitals: [],
+      ambulanceServices: [],
       doctors: [],
       ambulanceDrivers: [],
     });

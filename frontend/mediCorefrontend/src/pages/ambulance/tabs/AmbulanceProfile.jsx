@@ -12,6 +12,8 @@ const emptyProfile = {
   hasOxygen: false,
   hasStretcher: false,
   profileImageUrl: "",
+  latitude: "",
+  longitude: "",
 };
 
 const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
@@ -33,6 +35,8 @@ const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
         hasOxygen: driver?.hasOxygen || false,
         hasStretcher: driver?.hasStretcher || false,
         profileImageUrl: driver?.profileImageUrl || "",
+        latitude: driver?.latitude ?? "",
+        longitude: driver?.longitude ?? "",
       });
     }, 0);
     return () => clearTimeout(timer);
@@ -57,6 +61,27 @@ const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Your browser does not support location access.");
+      return;
+    }
+
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setForm((current) => ({
+          ...current,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+        }));
+        setMessage("Current location added. Save profile to update tracking.");
+      },
+      () => setError("Could not access current location. Please allow location permission."),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   };
 
   return (
@@ -86,6 +111,17 @@ const AmbulanceProfile = ({ driver, onUpdated, theme }) => {
         <Field theme={theme} label="Driving License Number" name="drivingLicenseNumber" value={form.drivingLicenseNumber} onChange={handleChange} maxLength={60} />
         <Field theme={theme} label="Experience (years)" name="driverExperience" type="number" value={form.driverExperience} onChange={handleChange} min={0} max={70} />
         <Field theme={theme} label="Profile Image URL" name="profileImageUrl" value={form.profileImageUrl} onChange={handleChange} type="url" />
+        <Field theme={theme} label="Latitude" name="latitude" type="number" step="any" value={form.latitude} onChange={handleChange} min={-90} max={90} />
+        <Field theme={theme} label="Longitude" name="longitude" type="number" step="any" value={form.longitude} onChange={handleChange} min={-180} max={180} />
+        <div className="md:col-span-2">
+          <button
+            type="button"
+            onClick={useCurrentLocation}
+            className={`h-10 rounded-lg border ${theme.border} ${theme.panelMuted} px-4 text-xs font-black ${theme.text} transition hover:border-[#0891B2] hover:text-[#0891B2]`}
+          >
+            Use Current Location
+          </button>
+        </div>
 
         {/* Checkboxes */}
         <div className="md:col-span-2">

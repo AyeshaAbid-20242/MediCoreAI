@@ -1,5 +1,6 @@
 import User from "../models/user.js";
 import AmbulanceJob from "../models/AmbulanceJob.js";
+import AmbulanceReview from "../models/AmbulanceReview.js";
 import {
   isValidObjectId,
   phoneRegex,
@@ -17,7 +18,10 @@ const driverSelect = "-password -otp -otpExpiry";
 const populateJob = (query) =>
   query
     .populate("patientId", "name fullName email mobileNumber")
-    .populate("driverId", "name fullName email mobileNumber vehicleNumber ambulanceType");
+    .populate(
+      "driverId",
+      "name fullName email mobileNumber vehicleNumber ambulanceType latitude longitude city"
+    );
 
 // Get driver profile
 const getDriverMe = async (req, res) => {
@@ -47,6 +51,13 @@ const getDriverDashboard = async (req, res) => {
     const pendingJobs = jobs.filter((job) =>
       ["requested", "accepted", "active"].includes(job.status)
     );
+    const reviews = await AmbulanceReview.find({ driverId: req.user._id })
+      .populate("patientId", "name fullName")
+      .populate("ambulanceJobId", "pickupLocation destination fare status updatedAt")
+      .sort({ createdAt: -1 });
+    const averageRating = reviews.length
+      ? (reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1)
+      : "0.0";
 
     res.status(200).json({
       message: "Driver dashboard fetched successfully",
@@ -56,8 +67,11 @@ const getDriverDashboard = async (req, res) => {
         completedJobs: completedJobs.length,
         pendingJobs: pendingJobs.length,
         totalEarnings: completedJobs.reduce((sum, job) => sum + Number(job.fare || 0), 0),
+        averageRating,
+        totalReviews: reviews.length,
       },
       jobs,
+      reviews,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -84,6 +98,8 @@ const updateDriverProfile = async (req, res) => {
       "hasOxygen",
       "hasStretcher",
       "profileImageUrl",
+      "latitude",
+      "longitude",
     ];
 
     const updates = {};
@@ -132,6 +148,18 @@ const updateDriverProfile = async (req, res) => {
     if (updates.hasOxygen !== undefined) updates.hasOxygen = toBoolean(updates.hasOxygen);
     if (updates.hasStretcher !== undefined) {
       updates.hasStretcher = toBoolean(updates.hasStretcher);
+    }
+    if (updates.latitude !== undefined) {
+      updates.latitude = toNumber(updates.latitude);
+      if (updates.latitude !== null && (updates.latitude < -90 || updates.latitude > 90)) {
+        errors.push("Latitude must be between -90 and 90.");
+      }
+    }
+    if (updates.longitude !== undefined) {
+      updates.longitude = toNumber(updates.longitude);
+      if (updates.longitude !== null && (updates.longitude < -180 || updates.longitude > 180)) {
+        errors.push("Longitude must be between -180 and 180.");
+      }
     }
 
     if (errors.length) return sendValidationError(res, errors);
@@ -200,6 +228,8 @@ const requestAmbulance = async (req, res) => {
       patientName,
       contactNumber,
       pickupLocation,
+      pickupLatitude,
+      pickupLongitude,
       destination,
       notes,
     } = req.body;
@@ -213,6 +243,20 @@ const requestAmbulance = async (req, res) => {
       errors.push("Valid contact number is required.");
     }
     if (!trimString(pickupLocation)) errors.push("Pickup location is required.");
+    const finalPickupLatitude = pickupLatitude === undefined ? null : toNumber(pickupLatitude);
+    const finalPickupLongitude = pickupLongitude === undefined ? null : toNumber(pickupLongitude);
+    if (
+      finalPickupLatitude !== null &&
+      (finalPickupLatitude < -90 || finalPickupLatitude > 90)
+    ) {
+      errors.push("Pickup latitude must be between -90 and 90.");
+    }
+    if (
+      finalPickupLongitude !== null &&
+      (finalPickupLongitude < -180 || finalPickupLongitude > 180)
+    ) {
+      errors.push("Pickup longitude must be between -180 and 180.");
+    }
     if (trimString(notes)?.length > 1000) errors.push("Notes cannot exceed 1000 characters.");
 
     if (errors.length) return sendValidationError(res, errors);
@@ -233,6 +277,8 @@ const requestAmbulance = async (req, res) => {
       patientName: trimString(patientName),
       contactNumber: trimString(contactNumber),
       pickupLocation: trimString(pickupLocation),
+      pickupLatitude: finalPickupLatitude,
+      pickupLongitude: finalPickupLongitude,
       destination: trimString(destination) || "",
       notes: trimString(notes) || "",
     });
@@ -303,12 +349,61 @@ const updateDriverJobStatus = async (req, res) => {
 
     job.status = status;
     if (finalFare !== undefined) job.fare = finalFare;
+    if (status === "completed" && !Number(job.fare)) job.fare = 1500;
     await job.save();
 
     const populatedJob = await populateJob(AmbulanceJob.findById(job._id));
 
     res.status(200).json({
       message: "Job updated successfully",
+      job: populatedJob,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+const updateDriverJobLocation = async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body;
+    const finalLatitude = toNumber(latitude);
+    const finalLongitude = toNumber(longitude);
+    const errors = [];
+
+    if (!isValidObjectId(req.params.id)) errors.push("Valid job id is required.");
+    if (finalLatitude === null || finalLongitude === null) {
+      errors.push("Latitude and longitude are required.");
+    }
+    if (finalLatitude !== null && (finalLatitude < -90 || finalLatitude > 90)) {
+      errors.push("Latitude must be between -90 and 90.");
+    }
+    if (finalLongitude !== null && (finalLongitude < -180 || finalLongitude > 180)) {
+      errors.push("Longitude must be between -180 and 180.");
+    }
+
+    if (errors.length) return sendValidationError(res, errors);
+
+    const job = await AmbulanceJob.findOne({
+      _id: req.params.id,
+      driverId: req.user._id,
+      status: { $in: ["accepted", "active"] },
+    });
+
+    if (!job) {
+      return res.status(404).json({
+        message: "Active ambulance job not found for live location update.",
+      });
+    }
+
+    job.driverLatitude = finalLatitude;
+    job.driverLongitude = finalLongitude;
+    job.driverLocationUpdatedAt = new Date();
+    await job.save();
+
+    const populatedJob = await populateJob(AmbulanceJob.findById(job._id));
+
+    res.status(200).json({
+      message: "Driver live location updated.",
       job: populatedJob,
     });
   } catch (error) {
@@ -323,6 +418,7 @@ export {
   getPatientAmbulanceJobs,
   requestAmbulance,
   updateDriverJobStatus,
+  updateDriverJobLocation,
   updateDriverProfile,
   activateDriverSubscription,
 };

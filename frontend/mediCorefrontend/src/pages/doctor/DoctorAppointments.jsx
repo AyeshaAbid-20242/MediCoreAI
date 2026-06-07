@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getApiError } from "../../api/axios";
 import { updateAppointmentStatus, updateAppointmentZoomLink } from "../../api/appointmentApi";
+import { createAppointmentPrescription } from "../../api/doctorApi";
 
 const groups = [
   ["requested", "New Requests"],
@@ -9,11 +10,41 @@ const groups = [
   ["closed", "Rejected / Cancelled"],
 ];
 
+const getAppointmentStart = (appointment) => {
+  if (!appointment?.appointmentDate || !appointment?.appointmentTime) return null;
+  const datePart = new Date(appointment.appointmentDate).toISOString().slice(0, 10);
+  const start = new Date(`${datePart}T${appointment.appointmentTime}:00`);
+
+  return Number.isNaN(start.getTime()) ? null : start;
+};
+
+const canJoinAppointment = (appointment) => {
+  const start = getAppointmentStart(appointment);
+  if (!start) return false;
+
+  const now = Date.now();
+  return now >= start.getTime() - 10 * 60 * 1000 && now <= start.getTime() + 60 * 60 * 1000;
+};
+
+const getJoinHelpText = (appointment) => {
+  const start = getAppointmentStart(appointment);
+  if (!start) return "Meeting time is not set.";
+  const opensAt = new Date(start.getTime() - 10 * 60 * 1000);
+
+  if (Date.now() < opensAt.getTime()) {
+    return `Join opens at ${opensAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
+  }
+
+  return "Meeting window has ended.";
+};
+
 const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState("");
   const [links, setLinks] = useState({});
   const [zoomSuccess, setZoomSuccess] = useState({});
+  const [prescriptionForms, setPrescriptionForms] = useState({});
+  const [prescriptionSuccess, setPrescriptionSuccess] = useState({});
 
   const handleStatus = async (appointmentId, appointmentStatus) => {
     setSavingId(appointmentId);
@@ -38,6 +69,49 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
       await onRefresh();
     } catch (err) {
       setError(getApiError(err, "Could not update meeting link"));
+    } finally {
+      setSavingId("");
+    }
+  };
+
+  const updatePrescriptionForm = (appointmentId, field, value) => {
+    setPrescriptionForms((current) => ({
+      ...current,
+      [appointmentId]: {
+        medicine: "",
+        dosage: "",
+        schedule: "",
+        duration: "",
+        instructions: "",
+        ...(current[appointmentId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handlePrescription = async (appointmentId) => {
+    const form = prescriptionForms[appointmentId] || {};
+    setSavingId(appointmentId);
+    setError("");
+
+    try {
+      await createAppointmentPrescription(appointmentId, form);
+      setPrescriptionForms((current) => ({
+        ...current,
+        [appointmentId]: {
+          medicine: "",
+          dosage: "",
+          schedule: "",
+          duration: "",
+          instructions: "",
+        },
+      }));
+      setPrescriptionSuccess((current) => ({ ...current, [appointmentId]: true }));
+      setTimeout(() => {
+        setPrescriptionSuccess((current) => ({ ...current, [appointmentId]: false }));
+      }, 3000);
+    } catch (err) {
+      setError(getApiError(err, "Could not create prescription"));
     } finally {
       setSavingId("");
     }
@@ -121,21 +195,32 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
                   )}
                 </div>
 
-                {/* Zoom Link Section */}
+                {/* Meeting Link Section */}
                 <div className={`mt-3 rounded-lg border ${theme.border} p-3 space-y-2`}>
                   <div className="flex items-center justify-between">
                     <p className={`text-[11px] font-black uppercase tracking-wider ${theme.subtext}`}>
                       Meeting Link
                     </p>
+                    {appointment.appointmentStatus === "requested" && (
+                      <span className={`text-[11px] font-bold ${theme.subtext}`}>
+                        Jitsi link auto-generates on accept
+                      </span>
+                    )}
                     {appointment.zoomLink && (
-                      <a      
-                        href={appointment.zoomLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] font-black text-[#0891B2] hover:underline"
-                      >
-                        Open Link
-                      </a>
+                      canJoinAppointment(appointment) ? (
+                        <a
+                          href={appointment.zoomLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-black text-[#0891B2] hover:underline"
+                        >
+                          Join Meeting
+                        </a>
+                      ) : (
+                        <span className={`text-[11px] font-bold ${theme.subtext}`} title={getJoinHelpText(appointment)}>
+                          {getJoinHelpText(appointment)}
+                        </span>
+                      )
                     )}
                   </div>
 
@@ -150,7 +235,7 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
                     <input
                       value={links[appointment._id] ?? appointment.zoomLink ?? ""}
                       onChange={(e) => setLinks({ ...links, [appointment._id]: e.target.value })}
-                      placeholder="Paste Zoom / Google Meet / Teams link"
+                      placeholder="Auto Jitsi link, or paste custom meeting link"
                       className={`h-9 min-w-0 flex-1 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2]`}
                     />
                     <button
@@ -169,6 +254,67 @@ const DoctorAppointments = ({ appointments, onRefresh, theme }) => {
                     </p>
                   )}
                 </div>
+
+                {["accepted", "completed"].includes(appointment.appointmentStatus) && (
+                  <div className={`mt-3 rounded-lg border ${theme.border} p-3 space-y-3`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className={`text-[11px] font-black uppercase tracking-wider ${theme.subtext}`}>
+                        Prescription
+                      </p>
+                      <span className={`text-[11px] font-bold ${theme.subtext}`}>
+                        Visible in patient prescriptions
+                      </span>
+                    </div>
+
+                    {prescriptionSuccess[appointment._id] && (
+                      <div className="rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-xs font-black text-[#166534]">
+                        Prescription saved for patient
+                      </div>
+                    )}
+
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <input
+                        value={prescriptionForms[appointment._id]?.medicine || ""}
+                        onChange={(event) => updatePrescriptionForm(appointment._id, "medicine", event.target.value)}
+                        placeholder="Medicine name"
+                        className={`h-9 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2]`}
+                      />
+                      <input
+                        value={prescriptionForms[appointment._id]?.dosage || ""}
+                        onChange={(event) => updatePrescriptionForm(appointment._id, "dosage", event.target.value)}
+                        placeholder="Dosage e.g. 500mg"
+                        className={`h-9 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2]`}
+                      />
+                      <input
+                        value={prescriptionForms[appointment._id]?.schedule || ""}
+                        onChange={(event) => updatePrescriptionForm(appointment._id, "schedule", event.target.value)}
+                        placeholder="Schedule e.g. twice daily after meal"
+                        className={`h-9 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2] md:col-span-2`}
+                      />
+                      <input
+                        value={prescriptionForms[appointment._id]?.duration || ""}
+                        onChange={(event) => updatePrescriptionForm(appointment._id, "duration", event.target.value)}
+                        placeholder="Duration e.g. 5 days"
+                        className={`h-9 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2]`}
+                      />
+                      <input
+                        value={prescriptionForms[appointment._id]?.instructions || ""}
+                        onChange={(event) => updatePrescriptionForm(appointment._id, "instructions", event.target.value)}
+                        placeholder="Instructions"
+                        className={`h-9 rounded-lg border ${theme.border} ${theme.panel} px-3 text-xs ${theme.text} outline-none focus:border-[#0891B2]`}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        disabled={savingId === appointment._id}
+                        onClick={() => handlePrescription(appointment._id)}
+                        className="h-9 rounded-lg bg-[#C8102E] px-4 text-xs font-black text-white transition hover:bg-[#a50d25] disabled:opacity-60"
+                      >
+                        {savingId === appointment._id ? "Saving..." : "Add Prescription"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </article>
             ))}
             {!getGroupItems(key).length && (

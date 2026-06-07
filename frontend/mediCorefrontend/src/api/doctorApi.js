@@ -16,6 +16,10 @@ export const activateDoctorSubscription = (payload) => {
   return api.post("/doctors/me/subscription", payload);
 };
 
+export const createAppointmentPrescription = (appointmentId, payload) => {
+  return api.post(`/doctors/appointments/${appointmentId}/prescriptions`, payload);
+};
+
 export const getPublicDoctors = () => {
   return api.get("/doctors/public");
 };

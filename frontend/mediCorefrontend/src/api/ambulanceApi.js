@@ -20,6 +20,10 @@ export const updateDriverJobStatus = (jobId, data) => {
   return api.patch(`/ambulance/jobs/${jobId}/status`, data);
 };
 
+export const updateDriverJobLocation = (jobId, data) => {
+  return api.patch(`/ambulance/jobs/${jobId}/location`, data);
+};
+
 export const updateDriverProfile = (data) => {
   return api.put("/ambulance/me/profile", data);
 };

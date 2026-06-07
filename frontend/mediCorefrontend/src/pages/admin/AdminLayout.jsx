@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AdminSidebar from "./AdminSidebar";
 import { adminNavItems } from "../sidebarNav";
+import ThemeToggle from "../../components/ThemeToggle";
 
 const AdminLayout = ({ admin, activeTab, setActiveTab, darkMode, setDarkMode, theme, pendingCount, children }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -94,13 +95,7 @@ const AdminLayout = ({ admin, activeTab, setActiveTab, darkMode, setDarkMode, th
                 />
 
                 {/* Dark mode toggle */}
-                <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg border ${theme.border} ${theme.panel} text-lg font-black ${theme.text}`}
-                  aria-label="Toggle dark mode"
-                >
-                  {darkMode ? "☀" : "◐"}
-                </button>
+                <ThemeToggle darkMode={darkMode} onToggle={() => setDarkMode(!darkMode)} theme={theme} />
 
                 {/* Admin badge */}
                 <div className="rounded-lg bg-[#C8102E] px-3 py-2 text-xs font-black text-white">

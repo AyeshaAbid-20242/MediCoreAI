@@ -12,6 +12,8 @@ const categoryLabels = {
   doctor: "Doctor",
   dentist: "Dentist",
   emergency: "Emergency",
+  ambulance_station: "Ambulance Service",
+  ambulance: "Ambulance Service",
 };
 
 const toRad = (value) => (value * Math.PI) / 180;
@@ -28,6 +30,8 @@ const getDistanceMeters = (lat1, lng1, lat2, lng2) => {
 };
 
 const getPlaceType = (tags = {}) => {
+  if (tags.emergency === "ambulance_station") return "ambulance_station";
+  if (tags.amenity === "ambulance_station") return "ambulance_station";
   if (tags.emergency === "yes") return "emergency";
   return tags.amenity || tags.healthcare || "healthcare";
 };
@@ -48,6 +52,13 @@ const getReadableName = (tags, type) => {
   return `Nearby ${categoryLabels[type] || "Care Center"}`;
 };
 
+const isHumanHealthcarePlace = (tags = {}) => {
+  const text = `${tags.name || ""} ${tags.amenity || ""} ${tags.healthcare || ""}`.toLowerCase();
+  return !["veterinary", "animal", "pet clinic", "pet hospital", "vet "].some((word) =>
+    text.includes(word)
+  );
+};
+
 const buildOverpassQuery = ({ lat, lng, radius }) => `
 [out:json][timeout:25];
 (
@@ -57,6 +68,12 @@ const buildOverpassQuery = ({ lat, lng, radius }) => `
   node["healthcare"~"hospital|clinic|doctor|pharmacy"](around:${radius},${lat},${lng});
   way["healthcare"~"hospital|clinic|doctor|pharmacy"](around:${radius},${lat},${lng});
   relation["healthcare"~"hospital|clinic|doctor|pharmacy"](around:${radius},${lat},${lng});
+  node["amenity"="ambulance_station"](around:${radius},${lat},${lng});
+  way["amenity"="ambulance_station"](around:${radius},${lat},${lng});
+  relation["amenity"="ambulance_station"](around:${radius},${lat},${lng});
+  node["emergency"="ambulance_station"](around:${radius},${lat},${lng});
+  way["emergency"="ambulance_station"](around:${radius},${lat},${lng});
+  relation["emergency"="ambulance_station"](around:${radius},${lat},${lng});
   node["emergency"="yes"](around:${radius},${lat},${lng});
   way["emergency"="yes"](around:${radius},${lat},${lng});
   relation["emergency"="yes"](around:${radius},${lat},${lng});
@@ -69,7 +86,7 @@ const mapElementToPlace = (element, userLat, userLng) => {
   const lat = element.lat ?? element.center?.lat;
   const lng = element.lon ?? element.center?.lon;
 
-  if (lat === undefined || lng === undefined) return null;
+  if (lat === undefined || lng === undefined || !isHumanHealthcarePlace(tags)) return null;
 
   const type = getPlaceType(tags);
   const name = getReadableName(tags, type);
@@ -147,4 +164,8 @@ const fetchNearbyCareFromOsm = async ({ lat, lng, radius }) => {
   throw new Error("Unable to fetch nearby care from Overpass API endpoints.");
 };
 
-export { fetchNearbyCareFromOsm, getDistanceMeters };
+const fetchNearbyCare = async ({ lat, lng, radius }) => {
+  return fetchNearbyCareFromOsm({ lat, lng, radius });
+};
+
+export { fetchNearbyCare, fetchNearbyCareFromOsm, getDistanceMeters };

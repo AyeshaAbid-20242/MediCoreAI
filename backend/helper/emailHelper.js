@@ -149,10 +149,10 @@ const sendZoomLinkEmail = async (email, patientName, doctorName, date, time, zoo
         </div>
       `,
     });
-    console.log("Zoom link email sent successfully");
+    console.log("Meeting link email sent successfully");
     return { sent: true };
   } catch (error) {
-    console.error("Zoom link email failed:", error.message);
+    console.error("Meeting link email failed:", error.message);
     return { sent: false, error: error.message };
   }
 };

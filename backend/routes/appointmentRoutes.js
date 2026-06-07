@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getDoctorAppointments,
+  getDoctorAvailability,
   getPatientAppointments,
   payAppointment,
   requestAppointment,
@@ -14,6 +15,7 @@ const router = express.Router();
 router.post("/", protect, authorizeRoles("patient"), requestAppointment);
 router.get("/me", protect, authorizeRoles("patient"), getPatientAppointments);
 router.get("/my", protect, authorizeRoles("patient"), getPatientAppointments);
+router.get("/doctor/:doctorId/availability", protect, authorizeRoles("patient"), getDoctorAvailability);
 router.patch("/:id/pay", protect, authorizeRoles("patient"), payAppointment);
 
 router.get("/doctor/me", protect, authorizeRoles("doctor"), getDoctorAppointments);

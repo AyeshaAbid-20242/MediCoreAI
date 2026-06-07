@@ -42,7 +42,7 @@ import {
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("medicore-theme") !== "light");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
 
@@ -139,6 +139,10 @@ const AdminDashboard = () => {
     };
     void load();
   }, [fetchData]);
+
+  useEffect(() => {
+    localStorage.setItem("medicore-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   useEffect(() => {
     if (activeTab === "users") {

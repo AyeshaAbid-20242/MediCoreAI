@@ -30,6 +30,18 @@ const ambulanceJobSchema = new mongoose.Schema(
       trim: true,
       maxlength: 200,
     },
+    pickupLatitude: {
+      type: Number,
+      default: null,
+      min: -90,
+      max: 90,
+    },
+    pickupLongitude: {
+      type: Number,
+      default: null,
+      min: -180,
+      max: 180,
+    },
     destination: {
       type: String,
       default: "",
@@ -51,6 +63,22 @@ const ambulanceJobSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    driverLatitude: {
+      type: Number,
+      default: null,
+      min: -90,
+      max: 90,
+    },
+    driverLongitude: {
+      type: Number,
+      default: null,
+      min: -180,
+      max: 180,
+    },
+    driverLocationUpdatedAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }
