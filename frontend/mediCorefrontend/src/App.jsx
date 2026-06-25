@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/auth/login";
 import Register from "./pages/auth/register";
-import ForgotPassword from "./pages/auth/forgotpassword";
+import ForgotPassword from "./pages/auth/forgot";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import PendingApproval from "./pages/doctor/PendingApproval";
 import PatientDashboard from "./pages/patient/PatientDashboard";
