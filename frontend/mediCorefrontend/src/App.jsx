@@ -38,7 +38,7 @@ const App = () => {
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/forgotpassword" element={<ForgotPassword />} />
 
         {/* Default Route */}
         <Route path="/" element={<Navigate to="/login" />} />
