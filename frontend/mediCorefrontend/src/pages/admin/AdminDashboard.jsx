@@ -13,7 +13,6 @@ import Analytics from "./tabs/Analytics";
 import Reviews from "./tabs/Reviews";
 import Messages from "./tabs/Messages";
 import Settings from "./tabs/Settings";
-
 import {
   getAdminStats,
   getPendingUsers,
